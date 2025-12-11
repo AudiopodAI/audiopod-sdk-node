@@ -1,171 +1,189 @@
-# AudioPod SDK for Node.js
+# AudioPod Node.js SDK
 
 Official Node.js SDK for [AudioPod AI](https://audiopod.ai) - Professional Audio Processing powered by AI.
+
+[![npm version](https://badge.fury.io/js/audiopod.svg)](https://www.npmjs.com/package/audiopod)
+[![Node 16+](https://img.shields.io/badge/node-16+-green.svg)](https://nodejs.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Installation
 
 ```bash
-npm install audiopod-sdk
+npm install audiopod
 # or
-yarn add audiopod-sdk
+yarn add audiopod
 ```
 
 ## Quick Start
 
 ```typescript
-import { AudioPodClient } from 'audiopod-sdk';
+import AudioPod from "audiopod";
 
 // Initialize client
-const client = new AudioPodClient({ apiKey: 'ap_your_api_key' });
-// Or set AUDIOPOD_API_KEY environment variable
+const client = new AudioPod({ apiKey: "ap_your_api_key" });
 
-// Check wallet balance
-const balance = await client.wallet.getBalance();
-console.log(`Balance: ${balance.balance_usd}`);
-
-// Extract stems from audio
-const job = await client.stemExtraction.extractStems({
-  audioFile: 'song.mp3',
-  stemTypes: ['vocals', 'drums', 'bass', 'other'],
-  waitForCompletion: true,
+// Separate audio into 6 stems
+const result = await client.stems.separate({
+  url: "https://youtube.com/watch?v=VIDEO_ID",
+  mode: "six",
 });
 
 // Download stems
-for (const [stem, url] of Object.entries(job.download_urls || {})) {
+for (const [stem, url] of Object.entries(result.download_urls)) {
   console.log(`${stem}: ${url}`);
 }
 ```
 
-## Services
+## Stem Separation
 
-### Wallet (API Billing)
+Extract individual audio components from mixed recordings.
+
+### Available Modes
+
+| Mode        | Stems | Output                                                          |
+| ----------- | ----- | --------------------------------------------------------------- |
+| `single`    | 1     | Specified stem only (vocals, drums, bass, guitar, piano, other) |
+| `two`       | 2     | Vocals + Instrumental                                           |
+| `four`      | 4     | Vocals, Drums, Bass, Other                                      |
+| `six`       | 6     | Vocals, Drums, Bass, Guitar, Piano, Other                       |
+| `producer`  | 8     | + Kick, Snare, Hihat                                            |
+| `studio`    | 12    | Full production toolkit                                         |
+| `mastering` | 16    | Maximum detail                                                  |
+
+### Examples
 
 ```typescript
-// Get balance
-const balance = await client.wallet.getBalance();
+import AudioPod from "audiopod";
 
-// Get pricing
-const pricing = await client.wallet.getPricing();
+const client = new AudioPod({ apiKey: "ap_your_api_key" });
+
+// Six-stem separation from YouTube
+const job = await client.stems.extract({
+  url: "https://youtube.com/watch?v=VIDEO_ID",
+  mode: "six",
+});
+console.log(`Job ID: ${job.id}`);
+
+// Wait for completion
+const result = await client.stems.waitForCompletion(job.id);
+console.log(result.download_urls);
+
+// Or use the convenience method (extract + wait)
+const result = await client.stems.separate({
+  url: "https://youtube.com/watch?v=VIDEO_ID",
+  mode: "six",
+});
+
+// From local file
+const result = await client.stems.separate({
+  file: "./song.mp3",
+  mode: "four",
+});
+
+// Extract only vocals
+const result = await client.stems.separate({
+  url: "https://youtube.com/watch?v=VIDEO_ID",
+  mode: "single",
+  stem: "vocals",
+});
+
+// Get available modes
+const modes = await client.stems.modes();
+modes.modes.forEach((m) => {
+  console.log(`${m.mode}: ${m.description}`);
+});
+```
+
+## API Wallet
+
+Check balance and manage your wallet.
+
+```typescript
+// Check balance
+const balance = await client.wallet.balance();
+console.log(`Balance: ${balance.balance_usd}`);
 
 // Estimate cost
-const estimate = await client.wallet.estimateCost('stem_extraction', 300);
+const estimate = await client.wallet.estimate("stem_extraction", 180);
+console.log(`Estimated cost: ${estimate.cost_usd}`);
 
-// Top up wallet
-const checkout = await client.wallet.createTopupCheckout(2500); // $25
-console.log(`Pay at: ${checkout.url}`);
-
-// Usage history
-const usage = await client.wallet.getUsageHistory(1, 50);
-```
-
-### Stem Extraction
-
-```typescript
-// Extract all stems
-const job = await client.stemExtraction.extractStems({
-  audioFile: 'song.mp3',
-  stemTypes: ['vocals', 'drums', 'bass', 'other'],
-  waitForCompletion: true,
-});
-
-// From URL
-const job = await client.stemExtraction.extractStems({
-  url: 'https://example.com/song.mp3',
-  stemTypes: ['vocals', 'other'],
-});
-
-// Check status
-const status = await client.stemExtraction.getJob(123);
-```
-
-### Transcription
-
-```typescript
-// Transcribe audio
-const result = await client.transcription.transcribe({
-  audioFile: 'podcast.mp3',
-  speakerDiarization: true,
-  waitForCompletion: true,
-});
-console.log(result.transcript);
-```
-
-### Voice Cloning & TTS
-
-```typescript
-// List voices
-const voices = await client.voice.listVoices();
-
-// Generate speech
-const audio = await client.voice.generateSpeech({
-  text: 'Hello, world!',
-  voiceId: 123,
-  waitForCompletion: true,
+// Get usage history
+const usage = await client.wallet.usage();
+usage.logs.forEach((log) => {
+  console.log(`${log.service_type}: ${log.amount_usd}`);
 });
 ```
 
-### Music Generation
+## Other Services
 
 ```typescript
-// Generate music
-const result = await client.music.generate({
-  prompt: 'upbeat electronic dance music',
-  duration: 30,
-  waitForCompletion: true,
-});
-```
+// Transcription
+const job = await client.transcription.create({ url: "https://..." });
+const result = await client.transcription.waitForCompletion(job.id);
 
-### Noise Reduction
-
-```typescript
-// Denoise audio
-const result = await client.denoiser.denoise({
-  audioFile: 'noisy.mp3',
-  mode: 'studio',
-  waitForCompletion: true,
+// Voice cloning
+const voice = await client.voice.clone({
+  file: "./sample.wav",
+  name: "My Voice",
 });
+
+// Music generation
+const song = await client.music.generate({
+  prompt: "upbeat electronic dance music",
+});
+
+// Noise reduction
+const clean = await client.denoiser.denoise({ file: "./noisy.wav" });
+
+// Speaker diarization
+const speakers = await client.speaker.diarize({ url: "https://..." });
 ```
 
 ## Error Handling
 
 ```typescript
-import { AudioPodClient, AuthenticationError, InsufficientBalanceError } from 'audiopod-sdk';
+import AudioPod, {
+  InsufficientBalanceError,
+  AuthenticationError,
+} from "audiopod";
 
 try {
-  const client = new AudioPodClient();
-  const job = await client.stemExtraction.extractStems({ audioFile: 'song.mp3' });
+  const client = new AudioPod({ apiKey: "ap_..." });
+  const result = await client.stems.separate({ url: "...", mode: "six" });
 } catch (error) {
   if (error instanceof AuthenticationError) {
-    console.log('Invalid API key');
+    console.log("Invalid API key");
   } else if (error instanceof InsufficientBalanceError) {
-    console.log(`Need to top up: required ${error.requiredCents} cents`);
+    console.log(`Need more credits. Required: ${error.requiredCents} cents`);
   }
 }
 ```
 
-## TypeScript Support
+## Environment Variables
 
-This SDK is written in TypeScript and includes full type definitions.
+```bash
+export AUDIOPOD_API_KEY="ap_your_api_key"
+```
 
 ```typescript
-import { AudioPodClient, WalletBalance, StemExtractionResult } from 'audiopod-sdk';
+// Client reads from env automatically
+const client = new AudioPod();
+```
 
-const client = new AudioPodClient();
+## TypeScript Support
 
-const balance: WalletBalance = await client.wallet.getBalance();
-const job: StemExtractionResult = await client.stemExtraction.extractStems({
-  audioFile: 'song.mp3',
-  waitForCompletion: true,
-});
+Full TypeScript support with exported types:
+
+```typescript
+import AudioPod, { StemExtractionJob, StemMode, WalletBalance } from "audiopod";
 ```
 
 ## Documentation
 
-- [API Reference](https://docs.audiopod.ai)
-- [API Wallet](https://docs.audiopod.ai/account/api-wallet)
-- [Stem Separation](https://docs.audiopod.ai/api-reference/stem-splitter)
+- [API Documentation](https://docs.audiopod.ai)
+- [API Reference](https://docs.audiopod.ai/api-reference/stem-splitter)
+- [Get API Key](https://www.audiopod.ai/dashboard/account/api-keys)
 
 ## License
 
-MIT
-
+MIT License - see [LICENSE](LICENSE) for details.

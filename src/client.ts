@@ -1,141 +1,221 @@
 /**
  * AudioPod API Client
+ *
+ * Clean, minimal API inspired by OpenAI's SDK design.
  */
 
-import axios, { AxiosInstance, AxiosError } from 'axios';
-import FormData from 'form-data';
-import * as fs from 'fs';
-import * as path from 'path';
-import { ClientConfig } from './types';
+import axios, { AxiosInstance, AxiosError } from "axios";
+import FormData from "form-data";
+import * as fs from "fs";
+import * as path from "path";
 import {
   AuthenticationError,
   APIError,
   RateLimitError,
   InsufficientBalanceError,
-} from './errors';
-import { WalletService } from './services/wallet';
-import { StemExtractionService } from './services/stemExtraction';
-import { TranscriptionService } from './services/transcription';
-import { VoiceService } from './services/voice';
-import { MusicService } from './services/music';
-import { SpeakerService } from './services/speaker';
-import { DenoiserService } from './services/denoiser';
-import { CreditService } from './services/credits';
+} from "./errors";
 
-const VERSION = '1.3.0';
+// Services
+import { Transcription } from "./resources/transcription";
+import { Voice } from "./resources/voice";
+import { Music } from "./resources/music";
+import { StemExtraction } from "./resources/stems";
+import { Denoiser } from "./resources/denoiser";
+import { Speaker } from "./resources/speaker";
+import { Wallet } from "./resources/wallet";
 
-export class AudioPodClient {
-  private axios: AxiosInstance;
-  private apiKey: string;
+const VERSION = "2.1.0";
+const DEFAULT_BASE_URL = "https://api.audiopod.ai";
+const DEFAULT_TIMEOUT = 60000;
 
-  // Services
-  public wallet: WalletService;
-  public stemExtraction: StemExtractionService;
-  public transcription: TranscriptionService;
-  public voice: VoiceService;
-  public music: MusicService;
-  public speaker: SpeakerService;
-  public denoiser: DenoiserService;
-  public credits: CreditService;
+export interface AudioPodOptions {
+  /** Your AudioPod API key (starts with 'ap_') */
+  apiKey?: string;
+  /** Base URL for the API (default: https://api.audiopod.ai) */
+  baseUrl?: string;
+  /** Request timeout in milliseconds (default: 60000) */
+  timeout?: number;
+  /** Maximum retries for failed requests (default: 2) */
+  maxRetries?: number;
+}
 
-  constructor(config?: Partial<ClientConfig>) {
-    this.apiKey = config?.apiKey || process.env.AUDIOPOD_API_KEY || '';
+export default class AudioPod {
+  private _axios: AxiosInstance;
+  private _apiKey: string;
 
-    if (!this.apiKey) {
+  /** Speech-to-text transcription */
+  readonly transcription: Transcription;
+  /** Voice cloning and text-to-speech */
+  readonly voice: Voice;
+  /** AI music generation */
+  readonly music: Music;
+  /** Audio stem separation */
+  readonly stems: StemExtraction;
+  /** Audio noise reduction */
+  readonly denoiser: Denoiser;
+  /** Speaker diarization and separation */
+  readonly speaker: Speaker;
+  /** API wallet and billing */
+  readonly wallet: Wallet;
+
+  constructor(options: AudioPodOptions = {}) {
+    this._apiKey = options.apiKey || process.env.AUDIOPOD_API_KEY || "";
+
+    if (!this._apiKey) {
       throw new AuthenticationError(
-        'API key required. Pass apiKey or set AUDIOPOD_API_KEY environment variable.'
+        "API key is required. Pass apiKey option or set AUDIOPOD_API_KEY environment variable."
       );
     }
 
-    if (!this.apiKey.startsWith('ap_')) {
-      throw new AuthenticationError("Invalid API key format. Keys start with 'ap_'");
+    if (!this._apiKey.startsWith("ap_")) {
+      throw new AuthenticationError(
+        "Invalid API key format. AudioPod API keys start with 'ap_'"
+      );
     }
 
-    this.axios = axios.create({
-      baseURL: config?.baseUrl || 'https://api.audiopod.ai',
-      timeout: config?.timeout || 30000,
+    this._axios = axios.create({
+      baseURL: options.baseUrl || DEFAULT_BASE_URL,
+      timeout: options.timeout || DEFAULT_TIMEOUT,
       headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-        'User-Agent': `audiopod-sdk/${VERSION}`,
-        Accept: 'application/json',
+        Authorization: `Bearer ${this._apiKey}`,
+        "X-API-Key": this._apiKey,
+        "Content-Type": "application/json",
+        "User-Agent": `audiopod-node/${VERSION}`,
+        Accept: "application/json",
       },
     });
 
-    // Response interceptor for error handling
-    this.axios.interceptors.response.use(
+    // Error interceptor
+    this._axios.interceptors.response.use(
       (response) => response,
-      (error: AxiosError) => {
-        if (error.response) {
-          const status = error.response.status;
-          const data = error.response.data as any;
-
-          if (status === 401) {
-            throw new AuthenticationError('Invalid API key');
-          } else if (status === 402) {
-            throw new InsufficientBalanceError(
-              data?.message || 'Insufficient balance',
-              data?.required_cents,
-              data?.available_cents
-            );
-          } else if (status === 429) {
-            throw new RateLimitError('Rate limit exceeded');
-          } else {
-            throw new APIError(data?.detail || error.message, status);
-          }
-        }
-        throw new APIError(error.message);
-      }
+      (error: AxiosError) => this._handleError(error)
     );
 
     // Initialize services
-    this.wallet = new WalletService(this);
-    this.stemExtraction = new StemExtractionService(this);
-    this.transcription = new TranscriptionService(this);
-    this.voice = new VoiceService(this);
-    this.music = new MusicService(this);
-    this.speaker = new SpeakerService(this);
-    this.denoiser = new DenoiserService(this);
-    this.credits = new CreditService(this);
+    this.transcription = new Transcription(this);
+    this.voice = new Voice(this);
+    this.music = new Music(this);
+    this.stems = new StemExtraction(this);
+    this.denoiser = new Denoiser(this);
+    this.speaker = new Speaker(this);
+    this.wallet = new Wallet(this);
   }
 
-  async request<T = any>(
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  private _handleError(error: AxiosError): never {
+    if (error.response) {
+      const status = error.response.status;
+      const data = error.response.data as any;
+      const message = data?.detail || data?.message || error.message;
+
+      switch (status) {
+        case 401:
+          throw new AuthenticationError(message || "Invalid API key");
+        case 402:
+          throw new InsufficientBalanceError(
+            message || "Insufficient wallet balance",
+            data?.required_cents,
+            data?.available_cents
+          );
+        case 429:
+          throw new RateLimitError(message || "Rate limit exceeded");
+        default:
+          throw new APIError(message, status);
+      }
+    }
+    throw new APIError(error.message);
+  }
+
+  /** @internal Make a GET request */
+  async get<T = any>(
     endpoint: string,
-    options?: {
-      data?: any;
-      params?: Record<string, any>;
-      formData?: FormData;
-    }
+    params?: Record<string, any>
   ): Promise<T> {
-    const config: any = {
-      method,
-      url: endpoint,
-      params: options?.params,
-    };
-
-    if (options?.formData) {
-      config.data = options.formData;
-      config.headers = {
-        ...options.formData.getHeaders(),
-      };
-    } else if (options?.data) {
-      config.data = options.data;
-    }
-
-    const response = await this.axios.request(config);
+    const response = await this._axios.get(endpoint, { params });
     return response.data;
   }
 
-  prepareFileUpload(filePath: string, fieldName: string = 'file'): FormData {
+  /** @internal Make a POST request */
+  async post<T = any>(endpoint: string, data?: any): Promise<T> {
+    const response = await this._axios.post(endpoint, data);
+    return response.data;
+  }
+
+  /** @internal Make a POST request with form data (non-file) */
+  async postForm<T = any>(
+    endpoint: string,
+    data: Record<string, any>
+  ): Promise<T> {
+    const formData = new FormData();
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined && value !== null) {
+        formData.append(key, String(value));
+      }
+    }
+    const response = await this._axios.post(endpoint, formData, {
+      headers: formData.getHeaders(),
+    });
+    return response.data;
+  }
+
+  /** @internal Make a DELETE request */
+  async delete<T = any>(endpoint: string): Promise<T> {
+    const response = await this._axios.delete(endpoint);
+    return response.data;
+  }
+
+  /** @internal Upload a file */
+  async upload<T = any>(
+    endpoint: string,
+    filePath: string,
+    fieldName: string = "file",
+    additionalFields?: Record<string, any>
+  ): Promise<T> {
     const formData = new FormData();
     const filename = path.basename(filePath);
     formData.append(fieldName, fs.createReadStream(filePath), filename);
-    return formData;
+
+    if (additionalFields) {
+      for (const [key, value] of Object.entries(additionalFields)) {
+        if (value !== undefined && value !== null) {
+          formData.append(
+            key,
+            typeof value === "object" ? JSON.stringify(value) : String(value)
+          );
+        }
+      }
+    }
+
+    const response = await this._axios.post(endpoint, formData, {
+      headers: formData.getHeaders(),
+    });
+    return response.data;
   }
 
-  async getUserInfo(): Promise<any> {
-    return this.request('GET', '/api/v1/auth/me');
+  /** @internal Upload with buffer */
+  async uploadBuffer<T = any>(
+    endpoint: string,
+    buffer: Buffer,
+    filename: string,
+    fieldName: string = "file",
+    additionalFields?: Record<string, any>
+  ): Promise<T> {
+    const formData = new FormData();
+    formData.append(fieldName, buffer, { filename });
+
+    if (additionalFields) {
+      for (const [key, value] of Object.entries(additionalFields)) {
+        if (value !== undefined && value !== null) {
+          formData.append(
+            key,
+            typeof value === "object" ? JSON.stringify(value) : String(value)
+          );
+        }
+      }
+    }
+
+    const response = await this._axios.post(endpoint, formData, {
+      headers: formData.getHeaders(),
+    });
+    return response.data;
   }
 }
-

@@ -1,20 +1,68 @@
 /**
  * AudioPod SDK for Node.js
  * Professional Audio Processing powered by AI
+ * 
+ * @example
+ * ```typescript
+ * import AudioPod from 'audiopod';
+ * 
+ * const client = new AudioPod({ apiKey: 'ap_...' });
+ * 
+ * // Transcribe audio
+ * const job = await client.transcription.create({ url: 'https://...' });
+ * const result = await client.transcription.waitForCompletion(job.id);
+ * ```
  */
 
-export { AudioPodClient } from './client';
-export { WalletService } from './services/wallet';
-export { StemExtractionService } from './services/stemExtraction';
-export { TranscriptionService } from './services/transcription';
-export { VoiceService } from './services/voice';
-export { MusicService } from './services/music';
-export { SpeakerService } from './services/speaker';
-export { DenoiserService } from './services/denoiser';
-export { CreditService } from './services/credits';
+export { default, default as AudioPod } from './client';
+export type { AudioPodOptions } from './client';
 
-export * from './types';
-export * from './errors';
+// Service types
+export type {
+  // Transcription
+  TranscriptionCreateParams,
+  TranscriptionJob,
+  TranscriptionSegment,
+  
+  // Voice & TTS  
+  Voice,
+  VoiceCreateParams,
+  TTSCreateParams,
+  TTSJob,
+  
+  // Music
+  MusicCreateParams,
+  MusicJob,
+  
+  // Stem Extraction
+  StemExtractionParams,
+  StemExtractionJob,
+  StemType,
+  StemMode,
+  SingleStem,
+  StemModeInfo,
+  ModesResponse,
+  
+  // Denoiser
+  DenoiseParams,
+  DenoiseJob,
+  
+  // Speaker
+  SpeakerDiarizeParams,
+  SpeakerJob,
+  
+  // Wallet
+  WalletBalance,
+  UsageLog,
+} from './types';
 
-export const VERSION = '1.3.0';
+// Errors
+export {
+  AudioPodError,
+  AuthenticationError,
+  APIError,
+  RateLimitError,
+  InsufficientBalanceError,
+} from './errors';
 
+export const VERSION = '2.1.0';
