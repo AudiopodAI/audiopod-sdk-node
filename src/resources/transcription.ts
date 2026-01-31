@@ -34,7 +34,7 @@ export class Transcription {
       throw new Error('At least one URL is required');
     }
 
-    return this.client.post('/api/v1/transcribe/transcribe', {
+    return this.client.post('/api/v1/transcription/transcribe', {
       source_urls: urls,
       language: params.language,
       enable_speaker_diarization: params.speakerDiarization ?? false,
@@ -56,7 +56,7 @@ export class Transcription {
    * ```
    */
   async upload(params: { file: string; language?: string; speakerDiarization?: boolean }): Promise<TranscriptionJob> {
-    return this.client.upload('/api/v1/transcribe/transcribe-upload', params.file, 'files', {
+    return this.client.upload('/api/v1/transcription/transcribe-upload', params.file, 'files', {
       language: params.language,
       enable_speaker_diarization: params.speakerDiarization ?? false,
     });
@@ -66,14 +66,14 @@ export class Transcription {
    * Get a transcription job by ID
    */
   async get(jobId: number): Promise<TranscriptionJob> {
-    return this.client.get(`/api/v1/transcribe/jobs/${jobId}`);
+    return this.client.get(`/api/v1/transcription/jobs/${jobId}`);
   }
 
   /**
    * List transcription jobs
    */
   async list(params: PaginationParams & { status?: string } = {}): Promise<TranscriptionJob[]> {
-    return this.client.get('/api/v1/transcribe/jobs', {
+    return this.client.get('/api/v1/transcription/jobs', {
       offset: params.skip ?? 0,
       limit: params.limit ?? 50,
       status: params.status,
@@ -84,7 +84,7 @@ export class Transcription {
    * Delete a transcription job
    */
   async delete(jobId: number): Promise<void> {
-    await this.client.delete(`/api/v1/transcribe/jobs/${jobId}`);
+    await this.client.delete(`/api/v1/transcription/jobs/${jobId}`);
   }
 
   /**
@@ -93,7 +93,7 @@ export class Transcription {
    * @param format - Output format: 'json', 'txt', 'srt', 'vtt'
    */
   async getTranscript(jobId: number, format: 'json' | 'txt' | 'srt' | 'vtt' = 'json'): Promise<any> {
-    return this.client.get(`/api/v1/transcribe/jobs/${jobId}/transcript`, { format });
+    return this.client.get(`/api/v1/transcription/jobs/${jobId}/transcript`, { format });
   }
 
   /**

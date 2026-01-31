@@ -15,14 +15,14 @@ export class Voice {
    * List all voices
    */
   async list(): Promise<VoiceType[]> {
-    return this.client.get('/api/v1/voice/voices');
+    return this.client.get('/api/v1/voice/voice-profiles');
   }
 
   /**
    * Get a voice by ID
    */
   async get(voiceId: number): Promise<VoiceType> {
-    return this.client.get(`/api/v1/voice/voices/${voiceId}`);
+    return this.client.get(`/api/v1/voice/voices/${voiceId}/status`);
   }
 
   /**
@@ -37,7 +37,7 @@ export class Voice {
    * ```
    */
   async create(params: VoiceCreateParams): Promise<VoiceType> {
-    return this.client.upload('/api/v1/voice/voices', params.audioFile, 'audio_file', {
+    return this.client.upload('/api/v1/voice/voice-profiles', params.audioFile, 'file', {
       name: params.name,
       description: params.description,
     });
@@ -62,9 +62,8 @@ export class Voice {
    * ```
    */
   async speak(params: TTSCreateParams): Promise<TTSJob> {
-    return this.client.post('/api/v1/voice/tts/generate', {
-      text: params.text,
-      voice_id: params.voiceId,
+    return this.client.post(`/api/v1/voice/voices/${params.voiceId}/generate`, {
+      input_text: params.text,
       speed: params.speed ?? 1.0,
     });
   }
@@ -73,7 +72,7 @@ export class Voice {
    * Get TTS job status
    */
   async getJob(jobId: number): Promise<TTSJob> {
-    return this.client.get(`/api/v1/voice/tts/status/${jobId}`);
+    return this.client.get(`/api/v1/voice/tts-jobs/${jobId}/status`);
   }
 
   /**
@@ -84,12 +83,13 @@ export class Voice {
 
     while (Date.now() - startTime < timeout) {
       const job = await this.getJob(jobId);
+      const status = job.status?.toLowerCase();
 
-      if (job.status === 'COMPLETED') {
+      if (status === 'completed') {
         return job;
       }
 
-      if (job.status === 'FAILED') {
+      if (status === 'failed' || status === 'error') {
         throw new Error(`TTS generation failed: ${job.error_message || 'Unknown error'}`);
       }
 
