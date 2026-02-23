@@ -23,6 +23,7 @@ import { StemExtraction } from "./resources/stems";
 import { Denoiser } from "./resources/denoiser";
 import { Speaker } from "./resources/speaker";
 import { Wallet } from "./resources/wallet";
+import { VideoResource } from "./resources/video";
 
 const VERSION = "2.1.0";
 const DEFAULT_BASE_URL = "https://api.audiopod.ai";
@@ -57,6 +58,8 @@ export default class AudioPod {
   readonly speaker: Speaker;
   /** API wallet and billing */
   readonly wallet: Wallet;
+  /** Video generation (karaoke, music videos, lyric videos) */
+  readonly video: VideoResource;
 
   constructor(options: AudioPodOptions = {}) {
     this._apiKey = options.apiKey || process.env.AUDIOPOD_API_KEY || "";
@@ -99,6 +102,7 @@ export default class AudioPod {
     this.denoiser = new Denoiser(this);
     this.speaker = new Speaker(this);
     this.wallet = new Wallet(this);
+    this.video = new VideoResource(this);
   }
 
   private _handleError(error: AxiosError): never {
