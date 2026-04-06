@@ -1,6 +1,6 @@
 {
   "name": "audiopod",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Official AudioPod SDK for Node.js - Professional Audio Processing powered by AI",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

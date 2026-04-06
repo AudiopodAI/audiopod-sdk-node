@@ -97,36 +97,204 @@ export interface TTSJob {
   completed_at?: string;
 }
 
-// Music Generation Types
+// Music Generation Types — AudioMusic V2
 export type MusicTask =
   | "text2music"
   | "prompt2instrumental"
   | "lyric2vocals"
   | "text2rap"
   | "text2samples"
-  | "audio2audio"
-  | "songbloom";
+  | "cover"
+  | "repaint"
+  | "extract"
+  | "complete"
+  | "simple"
+  | "retake"
+  | "extend"
+  | "edit";
+
+export type AudioFormat = "wav" | "mp3" | "flac" | "ogg";
+export type InferMethod = "ode" | "sde";
+export type ModelVersion = "audiomusic-v2" | "audiomusic-v1.5";
 
 export interface MusicCreateParams {
+  /** Text description / caption of desired music */
   prompt: string;
+  /** Alias for prompt (AudioMusic V2 uses caption internally) */
+  caption?: string;
+  /** Song lyrics with structure tags: [verse], [chorus], [bridge], etc. */
   lyrics?: string;
+  /** Duration in seconds (-1 for auto, max 600). Default: -1 */
   duration?: number;
+  /** Generation task type */
   task?: MusicTask;
+  /** Genre preset name */
   genre?: string;
+  /** Custom name for the generated track */
   displayName?: string;
+  /** Generate instrumental only (ignore lyrics) */
+  instrumental?: boolean;
+  /** Output audio format. Default: "flac" */
+  format?: AudioFormat;
+  /** Model version. Default: "audiomusic-v2" */
+  modelVersion?: ModelVersion;
+  /** Number of diffusion inference steps (32-100). Default: 64 */
+  inferenceSteps?: number;
+  /** Classifier-free guidance scale (1.0-15.0). Default: 7.0 */
+  guidanceScale?: number;
+  /** Timestep shift factor (1.0-5.0). Default: 3.0 */
+  shift?: number;
+  /** Inference method: "ode" (Euler, faster) or "sde" (stochastic). Default: "ode" */
+  inferMethod?: InferMethod;
+  /** Enable 4B LM Chain-of-Thought reasoning. Default: true */
+  thinking?: boolean;
+  /** LM sampling temperature (0.0-2.0). Default: 0.85 */
+  lmTemperature?: number;
+  /** LM classifier-free guidance (0.0-10.0). Default: 2.0 */
+  lmCfgScale?: number;
+  /** LM top-k sampling (0-100, 0 disables). Default: 0 */
+  lmTopK?: number;
+  /** LM nucleus sampling (0.0-1.0). Default: 0.9 */
+  lmTopP?: number;
+  /** Generate metadata (BPM, key, time sig) via CoT. Default: true */
+  useCotMetas?: boolean;
+  /** Refine caption via CoT. Default: true */
+  useCotCaption?: boolean;
+  /** Generate/refine lyrics via CoT. Default: false */
+  useCotLyrics?: boolean;
+  /** Detect vocal language via CoT. Default: true */
+  useCotLanguage?: boolean;
+  /** Beats per minute (30-300, null for auto-detect) */
+  bpm?: number;
+  /** Musical key, e.g. "C Major", "Am" (null for auto-detect) */
+  keyscale?: string;
+  /** Time signature: "2/4", "3/4", "4/4", "6/8" (null for auto-detect) */
+  timesignature?: string;
+  /** Vocal language ISO 639-1 code, e.g. "en", "zh" ("unknown" for auto-detect) */
+  vocalLanguage?: string;
+  /** Number of variations to generate (1-8). Default: 1 */
+  batchSize?: number;
+  /** Random seed (-1 for random). Default: -1 */
+  seed?: number;
+  /** Generate LRC lyric timestamps. Default: false */
+  generateLrc?: boolean;
+  /** URL for track thumbnail image */
+  thumbnailUrl?: string;
+}
+
+export interface MusicSimpleParams {
+  /** Natural language description of desired music (1-1000 chars) */
+  query: string;
+  /** Generate instrumental only. Default: false */
+  instrumental?: boolean;
+  /** Vocal language code ("en", "zh", etc.). Default: "unknown" */
+  vocalLanguage?: string;
+  /** Custom display name */
+  displayName?: string;
+  /** Duration in seconds (-1 for auto). Default: -1 */
+  duration?: number;
+  /** Output format. Default: "flac" */
+  format?: AudioFormat;
+}
+
+export interface MusicCoverParams {
+  /** URL of the source audio to transform (required) */
+  srcAudioUrl: string;
+  /** Style description for the cover (required) */
+  caption: string;
+  /** New lyrics for the cover */
+  lyrics?: string;
+  /** Cover transformation strength (0.0-1.0). Default: 0.7 */
+  audioCoverStrength?: number;
+  /** Custom display name */
+  displayName?: string;
+  /** Duration in seconds (-1 for auto). Default: -1 */
+  duration?: number;
+  /** Output format. Default: "flac" */
+  format?: AudioFormat;
+}
+
+export interface MusicReferenceParams {
+  /** URL of reference audio for style guidance (required) */
+  referenceAudioUrl: string;
+  /** Text description / caption (required) */
+  caption: string;
+  /** Song lyrics */
+  lyrics?: string;
+  /** Generate instrumental only. Default: false */
+  instrumental?: boolean;
+  /** Custom display name */
+  displayName?: string;
+  /** Duration in seconds (-1 for auto). Default: -1 */
+  duration?: number;
+  /** Output format. Default: "flac" */
+  format?: AudioFormat;
+}
+
+export interface MusicAnalyzeParams {
+  /** URL of audio to analyze (required) */
+  audioUrl: string;
+  /** Pre-extracted semantic codes (optional) */
+  audioCodes?: string;
+  /** LM temperature for analysis (0.0-2.0). Default: 0.85 */
+  temperature?: number;
+}
+
+export interface MusicAnalyzeResponse {
+  success: boolean;
+  caption?: string;
+  lyrics?: string;
+  bpm?: number;
+  keyscale?: string;
+  timesignature?: string;
+  duration?: number;
+  language?: string;
+  audio_codes?: string;
+  error?: string;
+}
+
+export interface MusicExtractStemParams {
+  /** URL of audio to extract stem from (required) */
+  srcAudioUrl: string;
+  /** Track to extract: vocals, drums, bass, guitar, keyboard, strings, synth, percussion, brass, woodwinds, backing_vocals, fx */
+  trackName: string;
+  /** Custom display name */
+  displayName?: string;
+}
+
+export interface MusicVariation {
+  audio_url: string;
+  seed?: number;
 }
 
 export interface MusicJob {
   id: number;
   task: MusicTask;
   status: JobStatus;
+  progress?: number;
   output_url?: string;
   output_urls?: Record<string, string>;
+  output_paths?: Record<string, string>;
   audio_duration?: number;
   display_name?: string;
   thumbnail_url?: string;
+  prompt?: string;
+  lyrics?: string;
+  lrc_content?: string;
+  lrc_url?: string;
+  quality_score?: number;
+  language?: string;
+  genre?: string;
+  actual_seeds?: number[];
+  variations?: MusicVariation[];
+  share_token?: string;
+  share_url?: string;
+  is_shared?: boolean;
+  billing_status?: string;
+  estimated_credits?: number;
   error_message?: string;
   created_at?: string;
+  updated_at?: string;
   completed_at?: string;
 }
 
