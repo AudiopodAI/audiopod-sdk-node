@@ -1,7 +1,7 @@
 {
   "name": "audiopod",
-  "version": "2.3.0",
-  "description": "Official AudioPod SDK for Node.js - Professional Audio Processing powered by AI",
+  "version": "2.4.0",
+  "description": "Official AudioPod SDK + CLI for Node.js - Professional Audio Processing powered by AI",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -12,14 +12,17 @@
       "require": "./dist/index.js"
     }
   },
+  "bin": {
+    "audiopod": "./dist/cli.js"
+  },
   "files": [
     "dist",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "build": "tsup && chmod +x dist/cli.js",
+    "dev": "tsup --watch",
     "lint": "eslint src/",
     "test": "jest",
     "prepublishOnly": "npm run build"
