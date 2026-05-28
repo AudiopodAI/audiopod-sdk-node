@@ -1,6 +1,13 @@
 # AudioPod Node.js SDK
 
-Official Node.js SDK for [AudioPod AI](https://audiopod.ai) - Professional Audio Processing powered by AI.
+Official Node.js SDK for [AudioPod AI](https://audiopod.ai) — professional audio
+processing powered by AI: stem separation, transcription, voice cloning, music
+generation, noise reduction, and speaker diarization.
+
+This SDK is the **Platform (API + Agent)** surface of AudioPod — the developer
+entry point alongside the [Python SDK](https://pypi.org/project/audiopod/), the
+CLI, and the MCP server. API access is **pay-as-you-go** ($1 = 7,500 credits,
+credits never expire) — no subscription required.
 
 [![npm version](https://badge.fury.io/js/audiopod.svg)](https://www.npmjs.com/package/audiopod)
 [![Node 16+](https://img.shields.io/badge/node-16+-green.svg)](https://nodejs.org/)
