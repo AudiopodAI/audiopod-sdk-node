@@ -288,6 +288,35 @@ async function cmdJobs(args: Args): Promise<void> {
   emit(args, result);
 }
 
+async function cmdAudiobook(args: Args): Promise<void> {
+  const file = args.positional[0];
+  const text = flagStr(args, "text");
+  const title = flagStr(args, "title");
+  if (!title || (!file && !text)) {
+    process.stderr.write(
+      "usage: audiopod audiobook <file> --title TITLE [--author A] [--voice ID] [--out package.zip]\n" +
+      "       (omit <file> and pass --text to narrate raw text)\n",
+    );
+    process.exit(2);
+  }
+  const client = await makeClient(args);
+  const result = await client.audiobook.produce({
+    title,
+    author: flagStr(args, "author"),
+    file: file || undefined,
+    text: text || undefined,
+    voiceId: flagNum(args, "voice", 387),
+    timeoutMs: flagNum(args, "timeout", 1800) * 1000,
+  });
+  const out = flagStr(args, "out");
+  if (out && result.download_url) {
+    await downloadTo(result.download_url, out);
+    console.log(`Saved ${out}`);
+  } else {
+    emit(args, result);
+  }
+}
+
 // ---- Entry point ----
 
 const HELP = `audiopod — AudioPod CLI
@@ -299,6 +328,7 @@ Commands:
   audiopod transcribe <file_or_url>  Transcribe audio.
   audiopod stems <file_or_url>       Separate stems.
   audiopod clone <ref.wav> --name N  Clone a voice.
+  audiopod audiobook <file> --title  Produce an ACX audiobook.
   audiopod jobs <job_id>             Look up a job.
 
 Global flags:
@@ -314,6 +344,7 @@ const COMMANDS: Record<string, (a: Args) => Promise<void>> = {
   transcribe: cmdTranscribe,
   stems: cmdStems,
   clone: cmdClone,
+  audiobook: cmdAudiobook,
   jobs: cmdJobs,
 };
 
@@ -325,7 +356,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
   if (argv[0] === "--version" || argv[0] === "-v") {
     // Version is injected by tsup at build time via the package.json bundle.
     // For now read the running binary's process.env or fall back gracefully.
-    console.log(`audiopod ${process.env.AUDIOPOD_CLI_VERSION ?? "2.4.0"}`);
+    console.log(`audiopod ${process.env.AUDIOPOD_CLI_VERSION ?? "2.5.0"}`);
     return;
   }
 
