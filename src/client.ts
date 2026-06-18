@@ -24,6 +24,7 @@ import { Denoiser } from "./resources/denoiser";
 import { Speaker } from "./resources/speaker";
 import { Wallet } from "./resources/wallet";
 import { VideoResource } from "./resources/video";
+import { Audiobook } from "./resources/audiobook";
 
 const VERSION = "2.1.0";
 const DEFAULT_BASE_URL = "https://api.audiopod.ai";
@@ -60,6 +61,8 @@ export default class AudioPod {
   readonly wallet: Wallet;
   /** Video generation (karaoke, music videos, lyric videos) */
   readonly video: VideoResource;
+  /** Automated audiobook production (manuscript → ACX package) */
+  readonly audiobook: Audiobook;
 
   constructor(options: AudioPodOptions = {}) {
     this._apiKey = options.apiKey || process.env.AUDIOPOD_API_KEY || "";
@@ -103,6 +106,7 @@ export default class AudioPod {
     this.speaker = new Speaker(this);
     this.wallet = new Wallet(this);
     this.video = new VideoResource(this);
+    this.audiobook = new Audiobook(this);
   }
 
   private _handleError(error: AxiosError): never {
@@ -141,6 +145,12 @@ export default class AudioPod {
   /** @internal Make a POST request */
   async post<T = any>(endpoint: string, data?: any): Promise<T> {
     const response = await this._axios.post(endpoint, data);
+    return response.data;
+  }
+
+  /** @internal Make a PUT request */
+  async put<T = any>(endpoint: string, data?: any): Promise<T> {
+    const response = await this._axios.put(endpoint, data);
     return response.data;
   }
 
