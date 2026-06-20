@@ -44,6 +44,7 @@ export interface AudioPodOptions {
 export default class AudioPod {
   private _axios: AxiosInstance;
   private _apiKey: string;
+  private _baseUrl: string;
 
   /** Speech-to-text transcription */
   readonly transcription: Transcription;
@@ -79,8 +80,10 @@ export default class AudioPod {
       );
     }
 
+    this._baseUrl = options.baseUrl || DEFAULT_BASE_URL;
+
     this._axios = axios.create({
-      baseURL: options.baseUrl || DEFAULT_BASE_URL,
+      baseURL: this._baseUrl,
       timeout: options.timeout || DEFAULT_TIMEOUT,
       headers: {
         Authorization: `Bearer ${this._apiKey}`,
@@ -231,5 +234,17 @@ export default class AudioPod {
       headers: formData.getHeaders(),
     });
     return response.data;
+  }
+
+  /**
+   * @internal Build an authenticated `wss://` URL for a streaming endpoint.
+   * The API key travels as a query param because WebSocket handshakes can't
+   * carry custom auth headers from every client.
+   */
+  streamUrl(path: string): string {
+    const base = this._baseUrl.replace(/^http/, "ws");
+    const url = new URL(path, base.endsWith("/") ? base : base + "/");
+    url.searchParams.set("api_key", this._apiKey);
+    return url.toString();
   }
 }
