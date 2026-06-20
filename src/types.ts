@@ -65,6 +65,49 @@ export interface TranscriptionResult extends TranscriptionJob {
   full_text?: string;
 }
 
+// Real-time streaming transcription
+export interface TranscriptionStreamConfig {
+  /** BCP-47 language code (e.g. 'en'), or null/undefined to auto-detect. */
+  language?: string | null;
+  /** Label speakers in the live transcript. */
+  diarize?: boolean;
+  /** Audio sample rate in Hz (default 16000). Must match the PCM you send. */
+  sampleRate?: number;
+  /** Audio channel count (default 1 / mono). */
+  channels?: number;
+}
+
+export interface TranscriptionStreamWord {
+  word: string;
+  start: number;
+  end: number;
+  speaker?: number;
+  confidence?: number;
+}
+
+/** A server frame from a streaming session. `type` discriminates the payload. */
+export interface TranscriptionStreamEvent {
+  type: 'ready' | 'partial' | 'final' | 'usage' | 'completed' | 'error';
+  /** Transcript text (`partial` = interim, `final` = stable). */
+  text?: string;
+  words?: TranscriptionStreamWord[];
+  is_final?: boolean;
+  speech_final?: boolean;
+  /** Backing transcription job id (on `ready`/`completed`). */
+  job_id?: number;
+  session_id?: string;
+  /** True when this is a free capped preview (no persistence/billing). */
+  taste?: boolean;
+  max_duration_seconds?: number;
+  /** Credits consumed so far / total (on `usage`/`completed`). */
+  credits_used?: number;
+  streamed_seconds?: number;
+  transcript_path?: string | null;
+  /** Error code/message (on `error`), e.g. `PREMIUM_TIER_REQUIRED`. */
+  code?: string;
+  message?: string;
+}
+
 // Voice and TTS Types
 export interface Voice {
   id: number;

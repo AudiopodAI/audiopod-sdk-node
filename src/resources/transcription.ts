@@ -7,8 +7,10 @@ import type {
   TranscriptionCreateParams,
   TranscriptionJob,
   TranscriptionResult,
+  TranscriptionStreamConfig,
   PaginationParams,
 } from '../types';
+import { TranscriptionStream } from './transcription-stream';
 
 const POLL_INTERVAL = 3000;
 const DEFAULT_TIMEOUT = 600000; // 10 minutes
@@ -136,6 +138,27 @@ export class Transcription {
   async transcribe(params: TranscriptionCreateParams): Promise<TranscriptionJob> {
     const job = await this.create(params);
     return this.waitForCompletion(job.id || job.job_id!);
+  }
+
+  /**
+   * Open a real-time streaming transcription session over WebSocket.
+   *
+   * Returns a {@link TranscriptionStream} that is both an EventEmitter and an
+   * AsyncIterable. Send 16-bit PCM (16 kHz, mono) frames with `.sendAudio()`,
+   * then `.end()` to flush. Streaming uses premium accuracy and is prepaid —
+   * credits are reserved up front and settled to the actual duration on stop.
+   *
+   * @example
+   * ```typescript
+   * const stream = client.transcription.stream({ language: 'en', diarize: true });
+   * stream.on('final', (e) => console.log(e.text));
+   * await stream.ready;
+   * stream.sendAudio(pcm16le);
+   * stream.end();
+   * ```
+   */
+  stream(config: TranscriptionStreamConfig = {}): TranscriptionStream {
+    return new TranscriptionStream(this.client, config);
   }
 }
 

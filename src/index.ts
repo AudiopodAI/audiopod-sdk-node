@@ -23,8 +23,11 @@ export type {
   TranscriptionCreateParams,
   TranscriptionJob,
   TranscriptionSegment,
-  
-  // Voice & TTS  
+  TranscriptionStreamConfig,
+  TranscriptionStreamEvent,
+  TranscriptionStreamWord,
+
+  // Voice & TTS
   Voice,
   VoiceCreateParams,
   TTSCreateParams,
@@ -55,6 +58,9 @@ export type {
   WalletBalance,
   UsageLog,
 } from './types';
+
+// Streaming transcription
+export { TranscriptionStream } from './resources/transcription-stream';
 
 // Errors
 export {
