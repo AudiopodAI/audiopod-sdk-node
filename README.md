@@ -141,6 +141,33 @@ const clean = await client.denoiser.denoise({ file: "./noisy.wav" });
 const project = await client.audiobook.createProject({ title: "My Book", language: "en" });
 ```
 
+## Audiobooks: paragraph-level control
+
+Narration works at paragraph granularity — project → chapter → paragraph.
+
+```typescript
+// Manuscript parsing is async. waitForParse polls the project and throws
+// immediately if the parse failed (instead of hanging forever).
+await client.audiobook.waitForParse(projectId);
+
+// One round-trip for the project plus its chapters.
+const project = await client.audiobook.getProject(projectId, { includeChapters: true });
+const chapterId = project.chapters![0].id;
+
+// Omit page/perPage to get every paragraph in the chapter.
+const { paragraphs, total } = await client.audiobook.listParagraphs(projectId, chapterId);
+
+// Narrate a single paragraph (first take billed, first regeneration free).
+const take = await client.audiobook.narrateParagraph(projectId, paragraphs[0].id, {
+  voiceId: 42,
+  direction: "warm, unhurried",
+});
+const status = await client.audiobook.getParagraph(projectId, paragraphs[0].id);
+
+// Or queue one job for many paragraphs — omit both id lists for the whole project.
+const batch = await client.audiobook.batchNarrate(projectId, { voiceId: 42, chapterIds: [chapterId] });
+```
+
 ## OpenAI-Compatible Endpoints
 
 Already have OpenAI-shaped audio code? Point it at AudioPod — set the client

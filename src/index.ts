@@ -59,6 +59,23 @@ export type {
   UsageLog,
 } from './types';
 
+// Audiobook (project → chapter → paragraph)
+export type {
+  CreateProjectParams,
+  GenerateBookParams,
+  NarrateParams,
+  ProduceParams,
+  NarrateParagraphParams,
+  BatchNarrateParams,
+  AudiobookProject,
+  AudiobookProjectWithChapters,
+  AudiobookChapter,
+  AudiobookParagraph,
+  AudiobookParagraphListResponse,
+  AudiobookParagraphNarrationJob,
+  AudiobookBatchNarrationJob,
+} from './resources/audiobook';
+
 // Streaming transcription
 export { TranscriptionStream } from './resources/transcription-stream';
 
@@ -71,4 +88,4 @@ export {
   InsufficientBalanceError,
 } from './errors';
 
-export const VERSION = '2.5.0';
+export const VERSION = '2.6.0';
