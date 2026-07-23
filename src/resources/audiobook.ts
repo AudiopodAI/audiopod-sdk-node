@@ -48,6 +48,168 @@ export interface ProduceParams {
   pollIntervalMs?: number;
 }
 
+/** Narrate (or re-narrate) one paragraph. Every field is optional — omitted
+ *  fields fall back to the paragraph's stored settings. */
+export interface NarrateParagraphParams {
+  /** Voice override for this take. */
+  voiceId?: number;
+  /** Narrate this text instead of the stored paragraph text. */
+  textOverride?: string;
+  /** 0.5–2.0. */
+  narrationSpeed?: number;
+  narrationStyle?: string;
+  emotion?: string;
+  characterName?: string;
+  /** Screenplay direction for this take (max 500 chars). */
+  direction?: string;
+}
+
+/** Queue one job that narrates many paragraphs sequentially. Omit both
+ *  `chapterIds` and `paragraphIds` to narrate the whole project. */
+export interface BatchNarrateParams {
+  /** Voice override applied to every selected paragraph. */
+  voiceId?: number;
+  chapterIds?: string[];
+  paragraphIds?: string[];
+  /** Re-narrate paragraphs that already have audio (default false). */
+  includeCompleted?: boolean;
+  /** Include locked paragraphs (default false). */
+  includeLocked?: boolean;
+  /** Include paragraphs flagged `skip_narration` (default false). */
+  includeSkipped?: boolean;
+  /** Extra provider settings passed through verbatim. */
+  narrationSettings?: Record<string, any>;
+}
+
+/** One paragraph — the narration unit. */
+export interface AudiobookParagraph {
+  id: string;
+  chapter_id: string;
+  project_id: string;
+  position: number;
+  text: string;
+  word_count: number;
+  character_count: number;
+  voice_id?: number | null;
+  narration_speed?: number | null;
+  narration_style?: string | null;
+  emotion?: string | null;
+  character_name?: string | null;
+  direction?: string | null;
+  /** Explicit silence (ms) after this paragraph; null = automatic gap. */
+  pause_after_ms?: number | null;
+  review_flags?: Record<string, any> | null;
+  audio_file_path?: string | null;
+  duration_seconds?: number | null;
+  status: string;
+  locked: boolean;
+  skip_narration: boolean;
+  error_message?: string | null;
+  retry_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** `GET .../chapters/{id}/paragraphs`. `total` is always the FULL chapter count;
+ *  `page`/`per_page` are null when the caller asked for every paragraph. */
+export interface AudiobookParagraphListResponse {
+  paragraphs: AudiobookParagraph[];
+  total: number;
+  page?: number | null;
+  per_page?: number | null;
+  has_next?: boolean;
+  has_prev?: boolean;
+}
+
+/** `POST .../paragraphs/{id}/narrate`. */
+export interface AudiobookParagraphNarrationJob {
+  task_id: string;
+  paragraph_id: string;
+  status: string;
+  billing?: {
+    is_free_regen: boolean;
+    estimated_credits: number;
+    estimated_chars: number;
+    estimated_seconds: number;
+    take_number_after: number;
+  };
+  [key: string]: any;
+}
+
+/** `POST .../narration/batch`. */
+export interface AudiobookBatchNarrationJob {
+  job_id: number;
+  total_paragraphs: number;
+  skipped_paragraphs: number;
+  estimated_completion_time?: string | null;
+  [key: string]: any;
+}
+
+export interface AudiobookChapter {
+  id: string;
+  project_id: string;
+  chapter_number: number;
+  title: string;
+  content?: string;
+  word_count: number;
+  character_count: number;
+  estimated_duration_minutes?: number | null;
+  audio_file_path?: string | null;
+  duration_seconds?: number | null;
+  status: string;
+  error_message?: string | null;
+  retry_count: number;
+  skip_narration: boolean;
+  voice_id?: number | null;
+  narration_notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  [key: string]: any;
+}
+
+export interface AudiobookProject {
+  id: string;
+  user_id: string;
+  title: string;
+  author?: string | null;
+  status: string;
+  total_chapters: number;
+  estimated_duration_minutes?: number | null;
+  manuscript_filename?: string | null;
+  manuscript_format?: string | null;
+  manuscript_word_count?: number | null;
+  source_type?: string;
+  selected_voice_id?: number | null;
+  narration_speed?: number;
+  narration_style?: string;
+  parsing_completed_at?: string | null;
+  narration_started_at?: string | null;
+  narration_completed_at?: string | null;
+  production_completed_at?: string | null;
+  /** Sanitized failure reason; null unless something failed. */
+  error_message?: string | null;
+  created_at: string;
+  updated_at: string;
+  [key: string]: any;
+}
+
+/** `GET /projects/{id}`. `chapters` is `null` unless `includeChapters` was set —
+ *  distinct from `[]`, which means "asked for, and there are none". */
+export interface AudiobookProjectWithChapters extends AudiobookProject {
+  chapters?: AudiobookChapter[] | null;
+}
+
+/** Project statuses that mean the manuscript is parsed and chaptered. */
+const PARSED_STATUSES = [
+  'ready_for_narration',
+  'narrating',
+  'ready_for_production',
+  'mixing',
+  'ready_for_export',
+  'exporting',
+  'completed',
+];
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export class Audiobook {
@@ -59,14 +221,28 @@ export class Audiobook {
     return this.client.post(`${BASE}/projects`, params);
   }
 
-  /** List your audiobook projects (paginated). */
-  async listProjects(params: { skip?: number; limit?: number } = {}): Promise<any> {
-    return this.client.get(`${BASE}/projects`, { skip: params.skip ?? 0, limit: params.limit ?? 20 });
+  /** List your audiobook projects. `page` is 1-based; `perPage` maxes out at 100. */
+  async listProjects(
+    params: { page?: number; perPage?: number; statusFilter?: string; search?: string } = {},
+  ): Promise<any> {
+    return this.client.get(`${BASE}/projects`, {
+      page: params.page ?? 1,
+      per_page: params.perPage ?? 20,
+      status_filter: params.statusFilter,
+      search: params.search,
+    });
   }
 
-  /** Get a single project. */
-  async getProject(projectId: string): Promise<any> {
-    return this.client.get(`${BASE}/projects/${projectId}`);
+  /**
+   * Get a single project.
+   *
+   * Pass `includeChapters` to get the project's chapters inline and skip a
+   * second round-trip; otherwise `chapters` comes back `null`.
+   */
+  async getProject(projectId: string, params: { includeChapters?: boolean } = {}): Promise<AudiobookProjectWithChapters> {
+    return this.client.get(`${BASE}/projects/${projectId}`, {
+      include_chapters: params.includeChapters,
+    });
   }
 
   /** Delete a project. */
@@ -106,11 +282,11 @@ export class Audiobook {
   }
 
   // --------------------------------------------------------------- chapters
-  /** List chapters in a project. */
-  async listChapters(projectId: string, params: { skip?: number; limit?: number } = {}): Promise<any> {
+  /** List chapters in a project. `page` is 1-based; `perPage` maxes out at 500. */
+  async listChapters(projectId: string, params: { page?: number; perPage?: number } = {}): Promise<any> {
     return this.client.get(`${BASE}/projects/${projectId}/chapters`, {
-      skip: params.skip ?? 0,
-      limit: params.limit ?? 50,
+      page: params.page ?? 1,
+      per_page: params.perPage ?? 50,
     });
   }
 
@@ -127,6 +303,74 @@ export class Audiobook {
   /** Re-render a single chapter's audio (e.g. after an edit). */
   async regenerateChapter(projectId: string, chapterId: string): Promise<any> {
     return this.client.post(`${BASE}/projects/${projectId}/chapters/${chapterId}/regenerate`);
+  }
+
+  // ------------------------------------------------------------- paragraphs
+  /**
+   * List a chapter's paragraphs, ordered by position.
+   *
+   * Omit `page`/`perPage` (the default) and you get EVERY paragraph in the
+   * chapter. Pass them to page through instead — `total` is always the full
+   * chapter count either way.
+   */
+  async listParagraphs(
+    projectId: string,
+    chapterId: string,
+    params: { page?: number; perPage?: number } = {},
+  ): Promise<AudiobookParagraphListResponse> {
+    return this.client.get(`${BASE}/projects/${projectId}/chapters/${chapterId}/paragraphs`, {
+      page: params.page,
+      per_page: params.perPage,
+    });
+  }
+
+  /** Get a single paragraph (use this to poll narration status). */
+  async getParagraph(projectId: string, paragraphId: string): Promise<AudiobookParagraph> {
+    return this.client.get(`${BASE}/projects/${projectId}/paragraphs/${paragraphId}`);
+  }
+
+  /** Edit a paragraph (`text`, `voice_id`, `narration_speed`, `narration_style`, …). */
+  async updateParagraph(projectId: string, paragraphId: string, fields: Record<string, any>): Promise<AudiobookParagraph> {
+    return this.client.put(`${BASE}/projects/${projectId}/paragraphs/${paragraphId}`, fields);
+  }
+
+  /**
+   * Narrate (or re-narrate) a single paragraph. Returns immediately with a
+   * `task_id`; poll {@link Audiobook.getParagraph} for the result.
+   *
+   * Billing: the first take is billed, the first regeneration is free,
+   * subsequent regenerations are billed again.
+   */
+  async narrateParagraph(
+    projectId: string,
+    paragraphId: string,
+    params: NarrateParagraphParams = {},
+  ): Promise<AudiobookParagraphNarrationJob> {
+    return this.client.post(`${BASE}/projects/${projectId}/paragraphs/${paragraphId}/narrate`, {
+      voice_id: params.voiceId,
+      text_override: params.textOverride,
+      narration_speed: params.narrationSpeed,
+      narration_style: params.narrationStyle,
+      emotion: params.emotion,
+      character_name: params.characterName,
+      direction: params.direction,
+    });
+  }
+
+  /**
+   * Queue one job that narrates many paragraphs sequentially. Omit both id
+   * lists to narrate the whole project.
+   */
+  async batchNarrate(projectId: string, params: BatchNarrateParams = {}): Promise<AudiobookBatchNarrationJob> {
+    return this.client.post(`${BASE}/projects/${projectId}/narration/batch`, {
+      voice_id: params.voiceId,
+      chapter_ids: params.chapterIds,
+      paragraph_ids: params.paragraphIds,
+      include_completed: params.includeCompleted ?? false,
+      include_locked: params.includeLocked ?? false,
+      include_skipped: params.includeSkipped ?? false,
+      narration_settings: params.narrationSettings ?? {},
+    });
   }
 
   // ----------------------------------------------------------------- voices
@@ -146,13 +390,26 @@ export class Audiobook {
   }
 
   // -------------------------------------------------------------- narration
-  /** Queue narration for all chapters (or `chapterIds`) without waiting. */
+  /**
+   * Queue narration for all chapters (or `chapterIds`) without waiting.
+   *
+   * Posts to `/narration/batch`. The older `/narration/start` route was retired
+   * (PLAT-2087) because it bypassed metering, and now returns 410 Gone
+   * unconditionally — so every call through this method, including
+   * {@link Audiobook.produce}, used to fail outright. `batch` narrates the whole
+   * project when no `chapterIds` are given, which is what this has always meant.
+   */
   async startNarration(projectId: string, params: NarrateParams): Promise<any> {
-    return this.client.post(`${BASE}/projects/${projectId}/narration/start`, {
+    return this.client.post(`${BASE}/projects/${projectId}/narration/batch`, {
       voice_id: params.voiceId,
       chapter_ids: params.chapterIds,
-      narration_speed: params.narrationSpeed ?? 1.0,
-      narration_style: params.narrationStyle ?? 'narrative',
+      // The batch worker reads these out of narration_settings under the SHORT
+      // keys "speed"/"style" — narration_speed/narration_style would be accepted
+      // and then silently dropped.
+      narration_settings: {
+        speed: params.narrationSpeed ?? 1.0,
+        style: params.narrationStyle ?? 'narrative',
+      },
     });
   }
 
@@ -253,17 +510,45 @@ export class Audiobook {
     return { project_id: pid, export_job_id: exp.job_id, compliance_check: exp.compliance_check, ...manifest };
   }
 
-  /** @internal Wait for the manuscript to parse into chapters. */
-  private async waitForChapters(projectId: string, opts: { timeoutMs?: number; pollIntervalMs?: number } = {}): Promise<any[]> {
+  /**
+   * Block until the manuscript has finished parsing into chapters.
+   *
+   * Manuscript parsing is asynchronous and there is no parse-status endpoint,
+   * so this polls the project itself. It resolves with the project as soon as
+   * parsing has completed, and rejects **immediately** if the parse failed —
+   * unlike polling the chapter list for a non-empty result, which never
+   * terminates on failure.
+   */
+  async waitForParse(projectId: string, opts: { timeoutMs?: number; pollIntervalMs?: number } = {}): Promise<AudiobookProject> {
     const timeout = opts.timeoutMs ?? 600_000;
     const interval = opts.pollIntervalMs ?? 3000;
     const start = Date.now();
+    let last: AudiobookProject | undefined;
     while (Date.now() - start < timeout) {
-      const data = await this.listChapters(projectId, { limit: 50 });
-      const chapters = data.chapters ?? data.items ?? (Array.isArray(data) ? data : []);
-      if (chapters.length) return chapters;
+      const project = await this.getProject(projectId);
+      last = project;
+      const status = String(project.status ?? '').toLowerCase();
+      if (project.error_message) {
+        throw new Error(`Manuscript for ${projectId} failed to parse: ${project.error_message}`);
+      }
+      if (status === 'failed') {
+        throw new Error(`Manuscript for ${projectId} failed to parse (project status: failed)`);
+      }
+      if (project.parsing_completed_at || PARSED_STATUSES.includes(status)) return project;
       await sleep(interval);
     }
-    throw new Error(`Manuscript for ${projectId} did not parse in time`);
+    throw new Error(
+      `Manuscript for ${projectId} did not parse in time ` +
+        `(last status: ${last?.status ?? 'unknown'}, parsing_completed_at: ${last?.parsing_completed_at ?? 'null'})`,
+    );
+  }
+
+  /** @internal Wait for the manuscript to parse, then return its chapters. */
+  private async waitForChapters(projectId: string, opts: { timeoutMs?: number; pollIntervalMs?: number } = {}): Promise<any[]> {
+    await this.waitForParse(projectId, opts);
+    const data = await this.listChapters(projectId, { perPage: 500 });
+    const chapters = data.chapters ?? data.items ?? (Array.isArray(data) ? data : []);
+    if (!chapters.length) throw new Error(`Manuscript for ${projectId} parsed but produced no chapters`);
+    return chapters;
   }
 }
