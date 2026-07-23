@@ -390,13 +390,26 @@ export class Audiobook {
   }
 
   // -------------------------------------------------------------- narration
-  /** Queue narration for all chapters (or `chapterIds`) without waiting. */
+  /**
+   * Queue narration for all chapters (or `chapterIds`) without waiting.
+   *
+   * Posts to `/narration/batch`. The older `/narration/start` route was retired
+   * (PLAT-2087) because it bypassed metering, and now returns 410 Gone
+   * unconditionally — so every call through this method, including
+   * {@link Audiobook.produce}, used to fail outright. `batch` narrates the whole
+   * project when no `chapterIds` are given, which is what this has always meant.
+   */
   async startNarration(projectId: string, params: NarrateParams): Promise<any> {
-    return this.client.post(`${BASE}/projects/${projectId}/narration/start`, {
+    return this.client.post(`${BASE}/projects/${projectId}/narration/batch`, {
       voice_id: params.voiceId,
       chapter_ids: params.chapterIds,
-      narration_speed: params.narrationSpeed ?? 1.0,
-      narration_style: params.narrationStyle ?? 'narrative',
+      // The batch worker reads these out of narration_settings under the SHORT
+      // keys "speed"/"style" — narration_speed/narration_style would be accepted
+      // and then silently dropped.
+      narration_settings: {
+        speed: params.narrationSpeed ?? 1.0,
+        style: params.narrationStyle ?? 'narrative',
+      },
     });
   }
 
