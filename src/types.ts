@@ -147,7 +147,8 @@ export interface TTSGenerationParams {
 
 export interface TTSCreateParams {
   text: string;
-  voiceId: number;
+  /** Voice ID (number) or voice UUID/identifier (string) — the backend accepts either. */
+  voiceId: number | string;
   /** Speech speed, 0.25–4.0 (default 1.0). */
   speed?: number;
   /** Output audio format (e.g. "mp3", "wav", "flac", "ogg"). Default: "mp3". */

@@ -24,6 +24,7 @@ import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 
 import AudioPod from "./client";
+import type { StemMode } from "./types";
 
 const CONFIG_DIR = join(homedir(), ".audiopod");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
@@ -135,7 +136,7 @@ async function makeClient(args: Args): Promise<AudioPod> {
     process.exit(2);
   }
   const baseURL = flagStr(args, "base-url") ?? process.env.AUDIOPOD_BASE_URL;
-  return new AudioPod({ apiKey, baseURL });
+  return new AudioPod({ apiKey, baseUrl: baseURL });
 }
 
 // ---- Commands ----
@@ -236,7 +237,7 @@ async function cmdTranscribe(args: Args): Promise<void> {
   const job = await client.transcription.create({
     url: source,
     language: flagStr(args, "lang"),
-    diarize: flagBool(args, "diarize"),
+    speakerDiarization: flagBool(args, "diarize"),
   });
   emit(args, job);
 }
@@ -248,13 +249,15 @@ async function cmdStems(args: Args): Promise<void> {
     process.exit(2);
   }
   const client = await makeClient(args);
-  const modeMap: Record<string, "2stem_vocals" | "4stem" | "6stem" | "16stem"> = {
-    two: "2stem_vocals",
-    four: "4stem",
-    six: "6stem",
-    sixteen: "16stem",
+  const modeMap: Record<string, StemMode> = {
+    two: "two",
+    four: "four",
+    six: "six",
+    producer: "producer",
+    studio: "studio",
+    mastering: "mastering",
   };
-  const mode = modeMap[flagStr(args, "mode", "four") as string] ?? "4stem";
+  const mode = modeMap[flagStr(args, "mode", "four") as string] ?? "four";
   const job = await client.stems.extract({ url: source, mode });
   emit(args, job);
 }
@@ -270,7 +273,7 @@ async function cmdClone(args: Args): Promise<void> {
   const voice = await client.voice.create({
     name,
     description: flagStr(args, "description") ?? "",
-    files: [reference],
+    audioFile: reference,
   });
   emit(args, voice);
 }
