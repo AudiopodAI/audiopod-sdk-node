@@ -3,7 +3,15 @@
  */
 
 import type AudioPod from '../client';
-import type { Voice as VoiceType, VoiceCreateParams, TTSCreateParams, TTSJob } from '../types';
+import type {
+  Voice as VoiceType,
+  VoiceCreateParams,
+  TTSCreateParams,
+  TTSJob,
+  VoiceDesignParams,
+  VoiceDesignResponse,
+  VoiceDesignPublishParams,
+} from '../types';
 
 const POLL_INTERVAL = 2000;
 const DEFAULT_TIMEOUT = 300000; // 5 minutes
@@ -66,9 +74,18 @@ export class Voice {
     // FastAPI `Form(...)` fields (input_text, speed, ...), so it expects
     // multipart/form-data — a JSON body is rejected with 422. Use postForm,
     // not post (PLAT-2597).
+    //
+    // `generation_params` is a JSON-encoded string of directing controls
+    // (delivery mode, timestamp granularity, text normalization); the API
+    // whitelists the honored keys.
     return this.client.postForm(`/api/v1/voice/voices/${params.voiceId}/generate`, {
       input_text: params.text,
       speed: params.speed ?? 1.0,
+      audio_format: params.audioFormat,
+      language: params.language,
+      generation_params: params.generationParams
+        ? JSON.stringify(params.generationParams)
+        : undefined,
     });
   }
 
@@ -109,6 +126,42 @@ export class Voice {
   async generate(params: TTSCreateParams): Promise<TTSJob> {
     const job = await this.speak(params);
     return this.waitForCompletion(job.id);
+  }
+
+  /**
+   * Design a brand-new voice from a text description. Returns candidate
+   * previews — publish one with {@link Voice.publishDesign} to keep it.
+   *
+   * @example
+   * ```typescript
+   * const { previews } = await client.voice.design({
+   *   designPrompt: 'a warm, gravelly late-night radio host in his 50s',
+   *   numSamples: 3,
+   * });
+   * const voice = await client.voice.publishDesign({
+   *   previewId: previews[0].preview_id,
+   *   name: 'Midnight Host',
+   * });
+   * ```
+   */
+  async design(params: VoiceDesignParams): Promise<VoiceDesignResponse> {
+    return this.client.post('/api/v1/voice/design', {
+      design_prompt: params.designPrompt,
+      language: params.language,
+      preview_text: params.previewText,
+      num_samples: params.numSamples,
+    });
+  }
+
+  /**
+   * Publish a designed-voice preview into a reusable voice profile.
+   */
+  async publishDesign(params: VoiceDesignPublishParams): Promise<VoiceType> {
+    return this.client.post('/api/v1/voice/design/publish', {
+      preview_id: params.previewId,
+      name: params.name,
+      description: params.description,
+    });
   }
 }
 

@@ -26,6 +26,8 @@ import { Wallet } from "./resources/wallet";
 import { VideoResource } from "./resources/video";
 import { Audiobook } from "./resources/audiobook";
 import { Midi } from "./resources/midi";
+import { Podcast } from "./resources/podcast";
+import { Reader } from "./resources/reader";
 
 const VERSION = "2.1.0";
 const DEFAULT_BASE_URL = "https://api.audiopod.ai";
@@ -67,6 +69,10 @@ export default class AudioPod {
   readonly audiobook: Audiobook;
   /** Audio-to-MIDI conversion (standalone or from an existing stem job) */
   readonly midi: Midi;
+  /** Multi-speaker podcast studio (topic/sources → outline → transcript → audio) */
+  readonly podcast: Podcast;
+  /** Audio reader (article URL or text → narrated audio + embeddable player) */
+  readonly reader: Reader;
 
   constructor(options: AudioPodOptions = {}) {
     this._apiKey = options.apiKey || process.env.AUDIOPOD_API_KEY || "";
@@ -114,6 +120,8 @@ export default class AudioPod {
     this.video = new VideoResource(this);
     this.audiobook = new Audiobook(this);
     this.midi = new Midi(this);
+    this.podcast = new Podcast(this);
+    this.reader = new Reader(this);
   }
 
   private _handleError(error: AxiosError): never {

@@ -32,11 +32,24 @@ export type {
   VoiceCreateParams,
   TTSCreateParams,
   TTSJob,
-  
+  TTSDeliveryMode,
+  TTSTimestampType,
+  TTSGenerationParams,
+
+  // Voice Design
+  VoiceDesignParams,
+  VoiceDesignPreview,
+  VoiceDesignResponse,
+  VoiceDesignPublishParams,
+
   // Music
   MusicCreateParams,
+  MusicSimpleParams,
+  MusicCoverParams,
+  MusicReferenceParams,
+  MusicQuality,
   MusicJob,
-  
+
   // Stem Extraction
   StemExtractionParams,
   StemExtractionJob,
@@ -45,15 +58,18 @@ export type {
   SingleStem,
   StemModeInfo,
   ModesResponse,
-  
+  StemPackage,
+  StemExtractionAdvancedParams,
+  StemCatalogEntry,
+
   // Denoiser
   DenoiseParams,
   DenoiseJob,
-  
+
   // Speaker
   SpeakerDiarizeParams,
   SpeakerJob,
-  
+
   // Wallet
   WalletBalance,
   UsageLog,
@@ -64,6 +80,34 @@ export type {
   MidiConvertParams,
   MidiFromStemsParams,
   MidiJob,
+
+  // Audio Reader
+  ReaderEstimateParams,
+  ReaderGenerateParams,
+  ReaderEstimate,
+  ReaderJob,
+
+  // Podcast Studio
+  PodcastQualityPreset,
+  PodcastSpeakerRole,
+  PodcastVoiceType,
+  PodcastSegmentSize,
+  PodcastSourceType,
+  PodcastSpeakerCreate,
+  PodcastProjectCreateParams,
+  PodcastProjectUpdateParams,
+  PodcastProject,
+  PodcastSegment,
+  PodcastDialogue,
+  PodcastEpisodeProfileCreateParams,
+  PodcastEpisodeProfileUpdateParams,
+  PodcastSpeakerProfileCreateParams,
+  PodcastSpeakerProfileUpdateParams,
+  PodcastSpeakerUpdateParams,
+  PodcastOutlineGenerateParams,
+  PodcastSourceParams,
+  PodcastRegenerateDialogueParams,
+  PodcastGenerationProgress,
 } from './types';
 
 // Audiobook (project → chapter → paragraph)

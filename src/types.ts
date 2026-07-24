@@ -124,10 +124,70 @@ export interface VoiceCreateParams {
   description?: string;
 }
 
+/** Delivery style for a directed take. */
+export type TTSDeliveryMode = "stable" | "balanced" | "creative";
+/** Granularity of returned timestamp metadata. */
+export type TTSTimestampType = "word" | "character";
+
+/**
+ * Optional directing controls passed through verbatim as JSON in the
+ * `generation_params` form field. Keys are snake_case to match the API — only
+ * `delivery_mode`, `timestamp_type`, and `text_normalization` are honored;
+ * anything else is ignored server-side.
+ */
+export interface TTSGenerationParams {
+  /** Delivery style: "stable" | "balanced" | "creative". */
+  delivery_mode?: TTSDeliveryMode;
+  /** Timestamp granularity in the result metadata: "word" | "character". */
+  timestamp_type?: TTSTimestampType;
+  /** Normalize numbers/abbreviations before speaking. */
+  text_normalization?: boolean;
+  [key: string]: any;
+}
+
 export interface TTSCreateParams {
   text: string;
   voiceId: number;
+  /** Speech speed, 0.25–4.0 (default 1.0). */
   speed?: number;
+  /** Output audio format (e.g. "mp3", "wav", "flac", "ogg"). Default: "mp3". */
+  audioFormat?: string;
+  /** BCP-47 / ISO language of the input text (auto-detected when omitted). */
+  language?: string;
+  /** Advanced directing controls (delivery mode, timestamps, normalization). */
+  generationParams?: TTSGenerationParams;
+}
+
+// Voice Design Types
+export interface VoiceDesignParams {
+  /** Natural-language description of the voice to synthesize. */
+  designPrompt: string;
+  /** Optional target language for the previews. */
+  language?: string;
+  /** Text spoken in each preview sample. */
+  previewText?: string;
+  /** Number of candidate previews to generate (default 3). */
+  numSamples?: number;
+}
+
+export interface VoiceDesignPreview {
+  preview_id: string;
+  audio_url: string;
+  expires_at?: string | null;
+  preview_text?: string | null;
+}
+
+export interface VoiceDesignResponse {
+  previews: VoiceDesignPreview[];
+  credits_charged: number;
+}
+
+export interface VoiceDesignPublishParams {
+  /** `preview_id` of the candidate to keep (from a design() response). */
+  previewId: string;
+  /** Name for the published voice. */
+  name: string;
+  description?: string;
 }
 
 export interface TTSJob {
@@ -159,6 +219,9 @@ export type MusicTask =
 export type AudioFormat = "wav" | "mp3" | "flac" | "ogg";
 export type InferMethod = "ode" | "sde";
 export type ModelVersion = "audiomusic-v2" | "audiomusic-v1.5";
+/** Public generation-quality tier. "standard" is the default for all users;
+ *  "premium" (higher-fidelity) requires an eligible plan. */
+export type MusicQuality = "standard" | "premium";
 
 export interface MusicCreateParams {
   /** Text description / caption of desired music */
@@ -223,6 +286,8 @@ export interface MusicCreateParams {
   generateLrc?: boolean;
   /** URL for track thumbnail image */
   thumbnailUrl?: string;
+  /** Generation quality tier: "standard" (default) or "premium" (higher-fidelity). */
+  quality?: MusicQuality;
 }
 
 export interface MusicSimpleParams {
@@ -238,6 +303,8 @@ export interface MusicSimpleParams {
   duration?: number;
   /** Output format. Default: "flac" */
   format?: AudioFormat;
+  /** Generation quality tier: "standard" (default) or "premium" (higher-fidelity). */
+  quality?: MusicQuality;
 }
 
 export interface MusicCoverParams {
@@ -255,6 +322,8 @@ export interface MusicCoverParams {
   duration?: number;
   /** Output format. Default: "flac" */
   format?: AudioFormat;
+  /** Generation quality tier: "standard" (default) or "premium" (higher-fidelity). */
+  quality?: MusicQuality;
 }
 
 export interface MusicReferenceParams {
@@ -272,6 +341,8 @@ export interface MusicReferenceParams {
   duration?: number;
   /** Output format. Default: "flac" */
   format?: AudioFormat;
+  /** Generation quality tier: "standard" (default) or "premium" (higher-fidelity). */
+  quality?: MusicQuality;
 }
 
 export interface MusicAnalyzeParams {
@@ -408,6 +479,51 @@ export interface StemModeInfo {
 export interface ModesResponse {
   modes: StemModeInfo[];
   pricing: string;
+}
+
+/** Curated stem bundles for the advanced (45-instrument) catalog. */
+export type StemPackage = "essential" | "producer" | "studio" | "mastering";
+
+/**
+ * Advanced stem extraction over the full instrument catalog.
+ *
+ * Supply exactly ONE selection mode: `package` (a curated bundle),
+ * `singleStem` (isolate one instrument), `multiStemCount` (top-N split),
+ * `customStems` (an explicit list), or `excludeStems` (everything except the
+ * listed instruments, returned as one combined track). `targetStems` names the
+ * instruments to isolate when using a targeted method.
+ */
+export interface StemExtractionAdvancedParams {
+  /** Path to a local audio file. */
+  file?: string;
+  /** URL of audio/video (mutually exclusive with `file`). */
+  url?: string;
+  /** Separation method (default: "hierarchical"). */
+  method?: string;
+  /** Curated bundle: essential (6) / producer (10) / studio (14) / mastering (18+). */
+  package?: StemPackage | string;
+  /** Instruments to isolate. Array or a JSON-array string. */
+  targetStems?: string[] | string;
+  /** Instruments to exclude; returns one combined "everything-else" track. */
+  excludeStems?: string[] | string;
+  /** Two-stem split mode, e.g. "vocals" / "instrumental". */
+  twoStemsMode?: string;
+  /** Single instrument to target. */
+  targetInstrument?: string;
+  /** Isolate exactly one named stem. */
+  singleStem?: string;
+  /** Return the top-N most prominent stems. */
+  multiStemCount?: number;
+  /** Explicit list of stems to return. Array or a JSON-array string. */
+  customStems?: string[] | string;
+}
+
+export interface StemCatalogEntry {
+  id?: string;
+  name?: string;
+  required_tier?: string;
+  public_tier?: string;
+  [key: string]: any;
 }
 
 // Denoiser Types
@@ -570,4 +686,198 @@ export interface MidiJob {
   original_filename?: string;
   created_at?: string;
   completed_at?: string;
+}
+
+// Audio Reader Types
+export interface ReaderEstimateParams {
+  /** URL of an article/page to read aloud. */
+  url?: string;
+  /** Raw text/HTML content to read aloud (alternative to `url`). */
+  content?: string;
+  /** Narration voice id. */
+  voice?: string;
+}
+
+export interface ReaderGenerateParams {
+  /** URL of an article/page to read aloud. */
+  url?: string;
+  /** Raw text/HTML content to read aloud (alternative to `url`). */
+  content?: string;
+  /** Title for the generated audio. */
+  title?: string;
+  /** Narration voice id. */
+  voice?: string;
+  /** Callback URL notified when the job completes. */
+  webhookUrl?: string;
+  /** Show AudioPod branding on the embed player (default true). */
+  showBranding?: boolean;
+}
+
+export interface ReaderEstimate {
+  is_premium: boolean;
+  estimated_credits: number;
+  word_count: number;
+  char_count: number;
+  measured: boolean;
+  title?: string | null;
+  note?: string | null;
+}
+
+export interface ReaderJob {
+  id: number;
+  status: JobStatus | string;
+  progress: number;
+  title?: string | null;
+  word_count?: number | null;
+  audio_url?: string | null;
+  embed_url?: string | null;
+  embed_html?: string | null;
+  audio_duration_seconds?: number | null;
+  error?: string | null;
+  created_at: string;
+  completed_at?: string | null;
+}
+
+// Podcast Studio Types
+export type PodcastQualityPreset = "quick" | "standard" | "premium";
+export type PodcastSpeakerRole = "Host" | "Expert" | "Guest" | "Narrator";
+export type PodcastVoiceType = "preset" | "cloned" | "standard";
+export type PodcastSegmentSize = "short" | "medium" | "long";
+/** Grounding source kinds for a podcast project. */
+export type PodcastSourceType = "file" | "text" | "url" | "youtube";
+
+export interface PodcastSpeakerCreate {
+  name: string;
+  role: PodcastSpeakerRole;
+  /** "preset" | "cloned" | "standard" (default resolved server-side). */
+  voiceType?: PodcastVoiceType;
+  /** Provider voice id (string). */
+  voiceId?: string;
+  /** AudioPod voice-profile id (numeric reference). */
+  voiceRefId?: number;
+  language?: string;
+  useTurbo?: boolean;
+  backstory?: string;
+  personality?: string;
+}
+
+export interface PodcastProjectCreateParams {
+  title: string;
+  topic: string;
+  briefing?: string;
+  keyPoints?: string[];
+  language?: string;
+  qualityPreset?: PodcastQualityPreset;
+  targetDurationMinutes?: number;
+  speakers: PodcastSpeakerCreate[];
+  episodeProfileId?: string;
+  briefingSuffix?: string;
+}
+
+export interface PodcastProjectUpdateParams {
+  title?: string;
+  topic?: string;
+  briefing?: string;
+  keyPoints?: string[];
+  language?: string;
+  qualityPreset?: PodcastQualityPreset;
+  targetDurationMinutes?: number;
+}
+
+export interface PodcastSegment {
+  title: string;
+  description?: string;
+  size?: PodcastSegmentSize;
+}
+
+export interface PodcastDialogue {
+  speaker: string;
+  text: string;
+  useTurbo?: boolean;
+}
+
+export interface PodcastEpisodeProfileCreateParams {
+  name: string;
+  description?: string;
+  defaultBriefing?: string;
+  numSegments?: number;
+  tone?: string;
+  format?: string;
+}
+
+export interface PodcastEpisodeProfileUpdateParams {
+  name?: string;
+  description?: string;
+  defaultBriefing?: string;
+  numSegments?: number;
+  tone?: string;
+  format?: string;
+}
+
+export interface PodcastSpeakerProfileCreateParams {
+  name: string;
+  speakerName: string;
+  voiceId?: number;
+  backstory?: string;
+  personality?: string;
+  role?: PodcastSpeakerRole;
+  language?: string;
+}
+
+export interface PodcastSpeakerProfileUpdateParams {
+  name?: string;
+  speakerName?: string;
+  voiceId?: number;
+  backstory?: string;
+  personality?: string;
+  role?: PodcastSpeakerRole;
+  language?: string;
+}
+
+export interface PodcastSpeakerUpdateParams {
+  name?: string;
+  role?: PodcastSpeakerRole;
+  voiceRefId?: number;
+  backstory?: string;
+  personality?: string;
+  language?: string;
+}
+
+export interface PodcastOutlineGenerateParams {
+  numSegments?: number;
+  focusAreas?: string[];
+  targetDurationMinutes?: number;
+}
+
+export interface PodcastSourceParams {
+  /** "file" | "text" | "url" | "youtube". */
+  sourceType: PodcastSourceType;
+  /** Raw text (for sourceType "text"). */
+  text?: string;
+  /** URL (for sourceType "url" / "youtube"). */
+  url?: string;
+  /** Local file path (for sourceType "file"). */
+  file?: string;
+}
+
+export interface PodcastRegenerateDialogueParams {
+  dialogueId: string;
+  newText?: string;
+}
+
+export interface PodcastGenerationProgress {
+  status: string;
+  progress_percentage: number;
+  dialogues_completed: number;
+  dialogues_total: number;
+  current_dialogue?: string | null;
+  estimated_time_remaining_seconds?: number | null;
+  error_message?: string | null;
+}
+
+/** A podcast project. The API returns a rich object; fields vary by lifecycle
+ *  stage, so only `id` is guaranteed here. */
+export interface PodcastProject {
+  id: string;
+  [key: string]: any;
 }
