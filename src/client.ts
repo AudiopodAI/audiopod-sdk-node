@@ -1,7 +1,7 @@
 /**
  * AudioPod API Client
  *
- * Clean, minimal API inspired by OpenAI's SDK design.
+ * Clean, minimal, ergonomic API design.
  */
 
 import axios, { AxiosInstance, AxiosError } from "axios";

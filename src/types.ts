@@ -252,7 +252,7 @@ export interface MusicCreateParams {
   shift?: number;
   /** Inference method: "ode" (Euler, faster) or "sde" (stochastic). Default: "ode" */
   inferMethod?: InferMethod;
-  /** Enable 4B LM Chain-of-Thought reasoning. Default: true */
+  /** Enable Chain-of-Thought reasoning for richer musical structure. Default: true */
   thinking?: boolean;
   /** LM sampling temperature (0.0-2.0). Default: 0.85 */
   lmTemperature?: number;
