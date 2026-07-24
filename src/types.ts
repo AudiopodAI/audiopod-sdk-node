@@ -512,3 +512,62 @@ export interface CostEstimate {
   cost_cents: number;
   cost_usd: string;
 }
+
+// Audio-to-MIDI Types
+export type MidiStem = "vocals" | "bass" | "guitar" | "piano" | "other" | "drums";
+
+/** Tunables forwarded to AudioPod's audio-to-MIDI engine. */
+export interface MidiConvertOptions {
+  onset_threshold?: number;
+  frame_threshold?: number;
+  min_note_len_ms?: number;
+  /** BPM override; omit/null to auto-detect via beat tracking. */
+  tempo_bpm?: number | null;
+}
+
+export interface MidiConvertParams {
+  /** Path to local audio file */
+  file?: string;
+  /** URL of audio/video to convert (alternative to file) */
+  url?: string;
+  /** Stems to transcribe. Defaults to ["bass", "vocals", "piano"] — the
+   * strongest instruments — when omitted. "guitar" is supported but
+   * opt-in/experimental (over-detects on busy mixes); pass it explicitly.
+   * "drums" and "other" are accepted but always come back in
+   * `skipped_stems` — not transcribed. */
+  stems?: MidiStem[];
+  options?: MidiConvertOptions;
+}
+
+export interface MidiFromStemsParams {
+  /** Subset of the source job's stems to transcribe (default: all of them —
+   * drums/other still land in `skipped_stems`; guitar is opt-in/experimental). */
+  stems?: MidiStem[];
+  options?: MidiConvertOptions;
+}
+
+export interface MidiJob {
+  id: number;
+  status: JobStatus;
+  progress?: number;
+  /** "split" | "transcribe" | "merge" */
+  stage?: string;
+  /** "standalone" | "from_stem_job" */
+  mode?: string;
+  source_job_id?: number;
+  stems_requested?: string[];
+  /** Per-stem MIDI download URLs */
+  midi_urls?: Record<string, string>;
+  /** Merged multitrack MIDI download URL */
+  merged_midi_url?: string;
+  /** Separated stem audio download URLs (standalone mode) */
+  stem_urls?: Record<string, string>;
+  detected_tempo_bpm?: number;
+  skipped_stems?: string[];
+  failed_stems?: Record<string, string>;
+  error_message?: string;
+  duration?: number;
+  original_filename?: string;
+  created_at?: string;
+  completed_at?: string;
+}

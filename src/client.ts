@@ -25,6 +25,7 @@ import { Speaker } from "./resources/speaker";
 import { Wallet } from "./resources/wallet";
 import { VideoResource } from "./resources/video";
 import { Audiobook } from "./resources/audiobook";
+import { Midi } from "./resources/midi";
 
 const VERSION = "2.1.0";
 const DEFAULT_BASE_URL = "https://api.audiopod.ai";
@@ -64,6 +65,8 @@ export default class AudioPod {
   readonly video: VideoResource;
   /** Automated audiobook production (manuscript → ACX package) */
   readonly audiobook: Audiobook;
+  /** Audio-to-MIDI conversion (standalone or from an existing stem job) */
+  readonly midi: Midi;
 
   constructor(options: AudioPodOptions = {}) {
     this._apiKey = options.apiKey || process.env.AUDIOPOD_API_KEY || "";
@@ -110,6 +113,7 @@ export default class AudioPod {
     this.wallet = new Wallet(this);
     this.video = new VideoResource(this);
     this.audiobook = new Audiobook(this);
+    this.midi = new Midi(this);
   }
 
   private _handleError(error: AxiosError): never {
