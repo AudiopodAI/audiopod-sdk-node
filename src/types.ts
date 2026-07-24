@@ -521,7 +521,6 @@ export interface MidiConvertOptions {
   onset_threshold?: number;
   frame_threshold?: number;
   min_note_len_ms?: number;
-  use_piano_model?: boolean;
   /** BPM override; omit/null to auto-detect via beat tracking. */
   tempo_bpm?: number | null;
 }
@@ -531,14 +530,18 @@ export interface MidiConvertParams {
   file?: string;
   /** URL of audio/video to convert (alternative to file) */
   url?: string;
-  /** Stems to transcribe (default: all pitched stems). "drums" is accepted
-   * but comes back in `skipped_stems` — not transcribed yet. */
+  /** Stems to transcribe. Defaults to ["bass", "vocals", "piano"] — the
+   * strongest instruments — when omitted. "guitar" is supported but
+   * opt-in/experimental (over-detects on busy mixes); pass it explicitly.
+   * "drums" and "other" are accepted but always come back in
+   * `skipped_stems` — not transcribed. */
   stems?: MidiStem[];
   options?: MidiConvertOptions;
 }
 
 export interface MidiFromStemsParams {
-  /** Subset of the source job's stems to transcribe (default: all of them) */
+  /** Subset of the source job's stems to transcribe (default: all of them —
+   * drums/other still land in `skipped_stems`; guitar is opt-in/experimental). */
   stems?: MidiStem[];
   options?: MidiConvertOptions;
 }

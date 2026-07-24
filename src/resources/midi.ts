@@ -2,10 +2,14 @@
  * Audio-to-MIDI Service
  *
  * Convert audio — or stems you already separated — into MIDI using
- * AudioPod's audio-to-MIDI engine. It's a starting-point transcription:
- * expect to tidy timing/note lengths by ear, dynamics are approximate, and
- * it works best on clean recordings. Drums are accepted as a requested stem
- * but aren't transcribed yet — they come back in `skipped_stems`.
+ * AudioPod's audio-to-MIDI engine. Transcribes bass, vocals, and piano by
+ * default (bass is the strongest instrument); guitar is supported too but
+ * is opt-in/experimental (over-detects on busy mixes). It's a starting-point
+ * transcription: expect to tidy timing/note lengths by ear in your DAW,
+ * dynamics are approximate, and it works best on clean recordings. Drums
+ * and "other" are accepted as a requested stem but aren't transcribed —
+ * they come back in `skipped_stems`. Detected tempo is surfaced as
+ * `detected_tempo_bpm`.
  */
 
 import type AudioPod from "../client";
@@ -28,16 +32,15 @@ export class Midi {
    *
    * @param params.file - Path to local audio file
    * @param params.url - URL of audio/video to convert (alternative to file)
-   * @param params.stems - Stems to transcribe, e.g. ["vocals", "bass", "piano"].
-   *   Defaults to all pitched stems server-side.
+   * @param params.stems - Stems to transcribe. Defaults to
+   *   ["bass", "vocals", "piano"] server-side when omitted. "guitar" is
+   *   supported but opt-in/experimental — pass it explicitly.
    * @param params.options - Tunables forwarded to the audio-to-MIDI engine.
    *
    * @example
    * ```typescript
-   * const job = await client.midi.convert({
-   *   file: './song.mp3',
-   *   stems: ['vocals', 'bass', 'piano'],
-   * });
+   * // Default stems: bass, vocals, piano
+   * const job = await client.midi.convert({ file: './song.mp3' });
    * console.log(job.merged_midi_url);
    * ```
    */
@@ -72,7 +75,8 @@ export class Midi {
    *
    * @param stemJobId - ID of a completed `client.stems` job
    * @param params.stems - Subset of the source job's stems to transcribe
-   *   (default: all of them)
+   *   (default: all of them — drums/other still land in `skipped_stems`;
+   *   "guitar" is opt-in/experimental)
    * @param params.options - Tunables forwarded to the audio-to-MIDI engine.
    *
    * @example
