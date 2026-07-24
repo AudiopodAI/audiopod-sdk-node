@@ -145,6 +145,22 @@ export interface AudiobookBatchNarrationJob {
   [key: string]: any;
 }
 
+/** `POST .../narration/cancel`. Cancellation is resume-not-restart: paragraphs
+ *  that already have audio are kept, un-narrated ones are reset to runnable, and
+ *  charges for the undelivered paragraphs are released. */
+export interface AudiobookNarrationCancellation {
+  job_id: number;
+  status: string;
+  /** Paragraphs that already had audio — left untouched. */
+  paragraphs_kept: number;
+  /** Un-narrated paragraphs returned to a runnable state. */
+  paragraphs_reset: number;
+  /** Credits released for the undelivered paragraphs. */
+  billing_released: number;
+  project_status: string;
+  [key: string]: any;
+}
+
 export interface AudiobookChapter {
   id: string;
   project_id: string;
@@ -371,6 +387,23 @@ export class Audiobook {
       include_skipped: params.includeSkipped ?? false,
       narration_settings: params.narrationSettings ?? {},
     });
+  }
+
+  /**
+   * Abort the project's running narration batch.
+   *
+   * Resume-not-restart: paragraphs that already have audio are left untouched,
+   * only the un-narrated paragraphs are reset to a runnable state so a later
+   * {@link Audiobook.batchNarrate} picks up where this left off, and charges
+   * for the undelivered paragraphs are released.
+   *
+   * If nothing is running (e.g. a prior cancel already succeeded) the call is
+   * idempotent and rejects with an `APIError` whose `statusCode` is 404 and
+   * whose error code is `no_narration_running` — the "nothing left to stop"
+   * case, not a failure.
+   */
+  async cancelNarration(projectId: string): Promise<AudiobookNarrationCancellation> {
+    return this.client.post(`${BASE}/projects/${projectId}/narration/cancel`);
   }
 
   // ----------------------------------------------------------------- voices

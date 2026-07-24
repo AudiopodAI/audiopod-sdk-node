@@ -24,7 +24,7 @@
     "build": "tsup && chmod +x dist/cli.js",
     "dev": "tsup --watch",
     "lint": "eslint src/",
-    "test": "jest",
+    "test": "node --import tsx --test test/*.test.ts",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
