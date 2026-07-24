@@ -62,7 +62,11 @@ export class Voice {
    * ```
    */
   async speak(params: TTSCreateParams): Promise<TTSJob> {
-    return this.client.post(`/api/v1/voice/voices/${params.voiceId}/generate`, {
+    // The backend `POST /voice/voices/{id}/generate` declares its params as
+    // FastAPI `Form(...)` fields (input_text, speed, ...), so it expects
+    // multipart/form-data — a JSON body is rejected with 422. Use postForm,
+    // not post (PLAT-2597).
+    return this.client.postForm(`/api/v1/voice/voices/${params.voiceId}/generate`, {
       input_text: params.text,
       speed: params.speed ?? 1.0,
     });
