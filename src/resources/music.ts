@@ -70,6 +70,7 @@ export class Music {
       seed: params.seed,
       generate_lrc: params.generateLrc,
       thumbnail_url: params.thumbnailUrl,
+      quality: params.quality,
     });
   }
 
@@ -113,6 +114,7 @@ export class Music {
       display_name: params.displayName,
       audio_duration: params.duration,
       format: params.format,
+      quality: params.quality,
     });
   }
 
@@ -138,6 +140,7 @@ export class Music {
       display_name: params.displayName,
       audio_duration: params.duration,
       format: params.format,
+      quality: params.quality,
     });
   }
 
@@ -163,6 +166,7 @@ export class Music {
       display_name: params.displayName,
       audio_duration: params.duration,
       format: params.format,
+      quality: params.quality,
     });
   }
 

@@ -12,6 +12,8 @@ import type {
   SingleStem,
   PaginationParams,
   ModesResponse,
+  StemExtractionAdvancedParams,
+  StemCatalogEntry,
 } from "../types";
 
 const POLL_INTERVAL = 3000;
@@ -93,6 +95,88 @@ export class StemExtraction {
     }
 
     throw new Error("Either file or url must be provided");
+  }
+
+  /**
+   * Advanced stem extraction over the full instrument catalog (45 instruments).
+   *
+   * Pick exactly one selection mode — `package`, `singleStem`, `multiStemCount`,
+   * `customStems`, or `excludeStems`. `targetStems`/`excludeStems`/`customStems`
+   * accept either a string array (JSON-encoded for you) or a raw JSON-array
+   * string. Requires an eligible plan (Creator+).
+   *
+   * The endpoint is `multipart/form-data`, so this uses `upload` (file) /
+   * `postForm` (url) — never a JSON body.
+   *
+   * @example
+   * ```typescript
+   * // Isolate the saxophone from a URL
+   * const job = await client.stems.extractAdvanced({
+   *   url: 'https://example.com/song.mp3',
+   *   singleStem: 'saxophone',
+   * });
+   *
+   * // Everything except the vocals (instrumental), from a curated bundle
+   * const job2 = await client.stems.extractAdvanced({
+   *   file: './song.wav',
+   *   excludeStems: ['vocals'],
+   * });
+   * ```
+   */
+  async extractAdvanced(
+    params: StemExtractionAdvancedParams
+  ): Promise<StemExtractionJob> {
+    if (!params.file && !params.url) {
+      throw new Error("Either file or url must be provided");
+    }
+    if (params.file && params.url) {
+      throw new Error("Provide either file or url, not both");
+    }
+
+    const asJson = (v: string[] | string | undefined): string | undefined =>
+      v === undefined ? undefined : Array.isArray(v) ? JSON.stringify(v) : v;
+
+    const fields: Record<string, any> = {
+      method: params.method,
+      package: params.package,
+      target_stems: asJson(params.targetStems),
+      exclude_stems: asJson(params.excludeStems),
+      two_stems_mode: params.twoStemsMode,
+      target_instrument: params.targetInstrument,
+      single_stem: params.singleStem,
+      multi_stem_count: params.multiStemCount,
+      custom_stems: asJson(params.customStems),
+    };
+
+    if (params.file) {
+      return this.client.upload(
+        "/api/v1/stem-extraction/extract/advanced",
+        params.file,
+        "file",
+        fields
+      );
+    }
+
+    fields.url = params.url;
+    return this.client.postForm(
+      "/api/v1/stem-extraction/extract/advanced",
+      fields
+    );
+  }
+
+  /**
+   * Get the full advanced stem catalog (every isolatable instrument plus the
+   * plan tier each one requires).
+   */
+  async catalog(): Promise<StemCatalogEntry[] | Record<string, any>> {
+    return this.client.get("/api/v1/stem-extraction/catalog");
+  }
+
+  /**
+   * List the curated stem packages available to the current account.
+   */
+  async availablePackages(): Promise<any> {
+    return this.client.get("/api/v1/stem-extraction/packages/available");
   }
 
   /**
