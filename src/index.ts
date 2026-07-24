@@ -57,6 +57,13 @@ export type {
   // Wallet
   WalletBalance,
   UsageLog,
+
+  // Audio to MIDI
+  MidiStem,
+  MidiConvertOptions,
+  MidiConvertParams,
+  MidiFromStemsParams,
+  MidiJob,
 } from './types';
 
 // Audiobook (project → chapter → paragraph)

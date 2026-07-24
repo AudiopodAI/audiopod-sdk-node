@@ -112,6 +112,28 @@ for (const [stem, url] of Object.entries(result.download_urls)) {
 const vocals = await client.stems.separate({ file: "./song.mp3", mode: "single", stem: "vocals" });
 ```
 
+## Audio to MIDI
+
+Convert a mix — or stems you already separated — into MIDI. It's a
+starting-point transcription: drums aren't transcribed yet, dynamics are
+approximate, and it works best on clean recordings.
+
+```typescript
+// Standalone: split + transcribe in one call
+const result = await client.midi.transcribe({
+  file: "./song.mp3",
+  stems: ["vocals", "bass", "piano"],
+});
+console.log(result.merged_midi_url);
+
+// Add-on: transcribe stems you already separated (bills the add-on rate only)
+const stemJob = await client.stems.separate({ file: "./song.mp3", mode: "six" });
+const midiJob = await client.midi.convertFromStemJob(stemJob.id);
+for (const [stem, url] of Object.entries(midiJob.midi_urls ?? {})) {
+  console.log(`${stem}: ${url}`);
+}
+```
+
 ## Transcription
 
 ```typescript
