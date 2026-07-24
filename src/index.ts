@@ -74,6 +74,7 @@ export type {
   AudiobookParagraphListResponse,
   AudiobookParagraphNarrationJob,
   AudiobookBatchNarrationJob,
+  AudiobookNarrationCancellation,
 } from './resources/audiobook';
 
 // Streaming transcription
