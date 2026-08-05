@@ -60,8 +60,72 @@ export interface NarrateParagraphParams {
   narrationStyle?: string;
   emotion?: string;
   characterName?: string;
-  /** Screenplay direction for this take (max 500 chars). */
+  /**
+   * Performance direction for this take — a short stage note the narrator acts
+   * on, e.g. `"urgent, low, barely audible"`.
+   *
+   * The field accepts up to 500 characters, but only the first ~110 shape the
+   * performance; anything beyond that is not voiced. Write one instruction of
+   * roughly a dozen words. When a direction is longer than that, the response
+   * carries a `warnings` entry saying so.
+   */
   direction?: string;
+}
+
+/** Optional extras for {@link Audiobook.parseManuscript}. */
+export interface ParseManuscriptParams {
+  /** Re-parse a project that already has chapters. Destructive: existing
+   *  chapters and paragraphs are replaced. */
+  force?: boolean;
+  /**
+   * Direct the book automatically once parsing finishes, so narration is
+   * expressive by default. Omit to accept the default for your auth method —
+   * which is OFF for API keys. See {@link Audiobook.autoDirect}.
+   */
+  autoDirection?: boolean;
+}
+
+/** Per-run narration settings for {@link Audiobook.batchNarrate}. */
+export interface NarrationSettings {
+  /**
+   * How expressive vs. consistent the read is. Book narration defaults to
+   * `"stable"` — it keeps one narrator across hundreds of paragraphs, at the
+   * cost of performance range. `"creative"` gives the voice the most range.
+   */
+  delivery_mode?: 'stable' | 'balanced' | 'creative';
+  /** 0.5–2.0. */
+  speed?: number;
+  /** Bare language subtag, e.g. `"it"`. Omit to use the project's language. */
+  language?: string;
+  [key: string]: any;
+}
+
+/** Optional scope for {@link Audiobook.autoDirect}. */
+export interface AutoDirectParams {
+  /** Direct only these chapters. Omit to direct the whole book. */
+  chapterIds?: string[];
+}
+
+/** What {@link Audiobook.autoDirect} queued. */
+export interface AutoDirectionJob {
+  job_id: string;
+  total_chapters: number;
+}
+
+/** Progress of an auto-direction run. */
+export interface AutoDirectionStatus {
+  job_id: string;
+  status: string;
+  progress: number;
+  current_step?: string | null;
+  error_message?: string | null;
+  result?: {
+    directed_count: number;
+    skipped_user_edited: number;
+    skipped_stale: number;
+    chapters_processed: number;
+    total_chapters: number;
+  } | null;
 }
 
 /** Queue one job that narrates many paragraphs sequentially. Omit both
@@ -77,8 +141,16 @@ export interface BatchNarrateParams {
   includeLocked?: boolean;
   /** Include paragraphs flagged `skip_narration` (default false). */
   includeSkipped?: boolean;
-  /** Extra provider settings passed through verbatim. */
-  narrationSettings?: Record<string, any>;
+  /**
+   * Extra narration settings passed through verbatim.
+   *
+   * `delivery_mode` is the expressiveness lever: `"stable"` holds one steady
+   * narrator across a long book, `"creative"` gives the voice the most range,
+   * `"balanced"` sits between. Book narration defaults to `"stable"` for voice
+   * consistency, so pass `"creative"` when a title wants a performed read.
+   * `speed` (0.5–2.0) and `language` (e.g. `"it"`) are also honoured here.
+   */
+  narrationSettings?: NarrationSettings;
 }
 
 /** One paragraph — the narration unit. */
@@ -272,12 +344,27 @@ export class Audiobook {
     return this.client.upload(`${BASE}/projects/${projectId}/manuscript/upload`, file, 'file');
   }
 
-  /** Parse an uploaded manuscript into chapters (async; returns a parse `job_id`). */
-  async parseManuscript(projectId: string, fileKey: string, filename: string): Promise<any> {
-    return this.client.postForm(`${BASE}/projects/${projectId}/manuscript/parse`, {
-      file_key: fileKey,
-      filename,
-    });
+  /**
+   * Parse an uploaded manuscript into chapters (async; returns a parse `job_id`).
+   *
+   * `autoDirection` runs {@link Audiobook.autoDirect} automatically once parsing
+   * finishes. It defaults to **off for API-key callers** (this SDK) so an
+   * integration's narration does not change without asking for it — pass `true`
+   * to opt in per parse, or call `autoDirect` later on a book you already have.
+   */
+  async parseManuscript(
+    projectId: string,
+    fileKey: string,
+    filename: string,
+    params: ParseManuscriptParams = {},
+  ): Promise<any> {
+    const body: Record<string, any> = { file_key: fileKey, filename };
+    if (params.force !== undefined) body.force = params.force;
+    // Only sent when the caller states one: absent is a real third state that
+    // means "use the default for my auth method", and `false` is an explicit
+    // "parse but leave the directions alone".
+    if (params.autoDirection !== undefined) body.auto_direction = params.autoDirection;
+    return this.client.postForm(`${BASE}/projects/${projectId}/manuscript/parse`, body);
   }
 
   /** Add a manuscript by pasting raw text. */
@@ -404,6 +491,62 @@ export class Audiobook {
    */
   async cancelNarration(projectId: string): Promise<AudiobookNarrationCancellation> {
     return this.client.post(`${BASE}/projects/${projectId}/narration/cancel`);
+  }
+
+  // -------------------------------------------------------------- direction
+  /**
+   * Write contextual reading direction onto every narratable paragraph, so the
+   * book narrates expressively instead of flat.
+   *
+   * Two passes: one narration brief for the whole book (its reading identity,
+   * derived from the metadata and opening pages), then a short performance note
+   * plus an emotion per paragraph, anchored to that brief so the tone holds
+   * across chapters instead of drifting. Dialogue gets directed as dialogue.
+   *
+   * Free on every plan. It never re-splits or deletes anything — it only writes
+   * `direction`/`emotion` onto rows that already exist — and a direction YOU
+   * wrote is never overwritten: those rows are marked user-owned and skipped.
+   *
+   * Directing does not re-render existing audio. Follow it with
+   * {@link Audiobook.batchNarrate} (`includeCompleted: true`) to hear it.
+   *
+   * @throws 409 when a direction run is already in flight for this project.
+   */
+  async autoDirect(projectId: string, params: AutoDirectParams = {}): Promise<AutoDirectionJob> {
+    const body: Record<string, any> = {};
+    if (params.chapterIds) body.chapter_ids = params.chapterIds;
+    return this.client.post(`${BASE}/projects/${projectId}/direction/auto`, body);
+  }
+
+  /** Progress of a specific auto-direction run. */
+  async autoDirectionStatus(projectId: string, jobId: string | number): Promise<AutoDirectionStatus> {
+    return this.client.get(`${BASE}/projects/${projectId}/direction/auto/${jobId}/status`);
+  }
+
+  /** Progress of this project's most recent auto-direction run. */
+  async latestAutoDirection(projectId: string): Promise<AutoDirectionStatus> {
+    return this.client.get(`${BASE}/projects/${projectId}/direction/auto/latest`);
+  }
+
+  /** Direct the book and block until the run finishes. */
+  async autoDirectAndWait(
+    projectId: string,
+    params: AutoDirectParams = {},
+    opts: { timeoutMs?: number; pollIntervalMs?: number } = {},
+  ): Promise<AutoDirectionStatus> {
+    const job = await this.autoDirect(projectId, params);
+    // Server-side a wedged run is treated as dead after 90 minutes; there is no
+    // point waiting longer than the service itself would.
+    const timeout = opts.timeoutMs ?? 900_000;
+    const interval = opts.pollIntervalMs ?? 3000;
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      const status = await this.autoDirectionStatus(projectId, job.job_id);
+      const state = (status.status || '').toUpperCase();
+      if (state === 'COMPLETED' || state === 'FAILED' || state === 'CANCELED') return status;
+      await new Promise((r) => setTimeout(r, interval));
+    }
+    throw new Error(`Auto direction did not finish within ${timeout}ms (job ${job.job_id})`);
   }
 
   // ----------------------------------------------------------------- voices
