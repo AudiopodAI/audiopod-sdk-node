@@ -44,7 +44,7 @@ test('cancelNarration POSTs to the narration/cancel path with no body and return
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].endpoint, '/api/v1/audiobook/projects/proj_abc/narration/cancel');
-  // No request body — matches `regenerateChapter` (post with no data argument).
+  // No request body — post with no data argument.
   assert.equal(calls[0].data, undefined);
   assert.deepEqual(result, body);
 });
@@ -63,4 +63,45 @@ test('cancelNarration surfaces the idempotent 404 (no_narration_running) as an A
       return true;
     },
   );
+});
+
+/**
+ * PLAT-3116 — `regenerateChapter` must not call the retired route.
+ *
+ * `POST /chapters/{chapter_id}/regenerate` rendered a whole chapter's TTS
+ * synchronously inside the request and charged nothing; it returns 410 Gone
+ * (PLAT-3056). Every call through this method failed outright until it was
+ * re-pointed at the billed batch route.
+ */
+test('regenerateChapter POSTs to narration/batch, not the 410 regenerate route', async () => {
+  const { resource, calls } = makeResource(() => ({ job_id: 91, total_paragraphs: 40, skipped_paragraphs: 0 }));
+
+  await resource.regenerateChapter('proj_abc', 'chap_7');
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].endpoint, '/api/v1/audiobook/projects/proj_abc/narration/batch');
+  assert.ok(
+    !calls[0].endpoint.includes('/regenerate'),
+    'still calling the retired route — every request would 410',
+  );
+});
+
+test('regenerateChapter scopes to the one chapter and forces include_completed', async () => {
+  const { resource, calls } = makeResource(() => ({ job_id: 92, total_paragraphs: 40, skipped_paragraphs: 0 }));
+
+  await resource.regenerateChapter('proj_abc', 'chap_7');
+
+  const body = calls[0].data as Record<string, unknown>;
+  assert.deepEqual(body.chapter_ids, ['chap_7'], 'must not re-narrate the whole project');
+  // A chapter being RE-rendered already has audio. Without include_completed
+  // every paragraph is skipped and the call 400s "No eligible paragraphs".
+  assert.equal(body.include_completed, true);
+});
+
+test('regenerateChapter passes a voice override through', async () => {
+  const { resource, calls } = makeResource(() => ({ job_id: 93, total_paragraphs: 40, skipped_paragraphs: 0 }));
+
+  await resource.regenerateChapter('proj_abc', 'chap_7', { voiceId: 55 });
+
+  assert.equal((calls[0].data as Record<string, unknown>).voice_id, 55);
 });
