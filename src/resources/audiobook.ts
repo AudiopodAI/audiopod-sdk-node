@@ -403,9 +403,31 @@ export class Audiobook {
     return this.client.put(`${BASE}/projects/${projectId}/chapters/${chapterId}`, fields);
   }
 
-  /** Re-render a single chapter's audio (e.g. after an edit). */
-  async regenerateChapter(projectId: string, chapterId: string): Promise<any> {
-    return this.client.post(`${BASE}/projects/${projectId}/chapters/${chapterId}/regenerate`);
+  /**
+   * Re-render a whole chapter's audio (e.g. after an edit).
+   *
+   * Posts to `/narration/batch`. The older `/chapters/{chapter_id}/regenerate`
+   * route is deprecated and returns 410 Gone unconditionally, as
+   * `/narration/start` does.
+   *
+   * `include_completed` is hard-coded true: a chapter being RE-rendered
+   * already has audio, and without it every paragraph is skipped and the call
+   * 400s with "No eligible paragraphs to narrate".
+   *
+   * The return shape changed with the route — this now resolves to a queued
+   * batch job ({@link AudiobookBatchNarrationJob}), not a finished chapter.
+   * Poll {@link Audiobook.narrationProgress} for completion.
+   */
+  async regenerateChapter(
+    projectId: string,
+    chapterId: string,
+    params: { voiceId?: number } = {},
+  ): Promise<AudiobookBatchNarrationJob> {
+    return this.client.post(`${BASE}/projects/${projectId}/narration/batch`, {
+      voice_id: params.voiceId,
+      chapter_ids: [chapterId],
+      include_completed: true,
+    });
   }
 
   // ------------------------------------------------------------- paragraphs
@@ -569,11 +591,11 @@ export class Audiobook {
   /**
    * Queue narration for all chapters (or `chapterIds`) without waiting.
    *
-   * Posts to `/narration/batch`. The older `/narration/start` route was retired
-   * (PLAT-2087) because it bypassed metering, and now returns 410 Gone
-   * unconditionally — so every call through this method, including
-   * {@link Audiobook.produce}, used to fail outright. `batch` narrates the whole
-   * project when no `chapterIds` are given, which is what this has always meant.
+   * Posts to `/narration/batch`. The older `/narration/start` route is
+   * deprecated and returns 410 Gone unconditionally — so every call through
+   * this method, including {@link Audiobook.produce}, used to fail outright.
+   * `batch` narrates the whole project when no `chapterIds` are given, which is
+   * what this has always meant.
    */
   async startNarration(projectId: string, params: NarrateParams): Promise<any> {
     return this.client.post(`${BASE}/projects/${projectId}/narration/batch`, {
