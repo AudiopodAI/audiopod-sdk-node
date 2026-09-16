@@ -1,5 +1,9 @@
 # Dependencies
 node_modules/
+# The rule above ends in a slash, so it matches directories only. A workspace
+# checkout's node_modules is a SYMLINK, which slipped past it and got committed
+# as a self-referential link that breaks `pnpm install` for everyone (PLAT-3252).
+node_modules
 
 # Build output
 dist/
