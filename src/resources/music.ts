@@ -97,7 +97,7 @@ export class Music {
 
   /**
    * Generate music from a simple natural language query using AudioMusic V2's Simple Mode.
-   * The 4B Language Model auto-generates caption, lyrics, BPM, key, time signature, and duration.
+   * AudioMusic auto-generates the caption, lyrics, BPM, key, time signature, and duration.
    *
    * @example
    * ```typescript
