@@ -14,6 +14,11 @@ never expire).
 [![npm version](https://badge.fury.io/js/audiopod.svg)](https://www.npmjs.com/package/audiopod)
 [![Node 16+](https://img.shields.io/badge/node-16+-green.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Run in Postman](https://run.pstmn.io/button.svg)](https://god.gw.postman.com/run-collection/58401244-916ddbda-1a70-4c07-8ccd-fe524703a84b?action=collection%2Ffork&source=rip_markdown&collection-url=entityId%3D58401244-916ddbda-1a70-4c07-8ccd-fe524703a84b%26entityType%3Dcollection%26workspaceId%3D8013472d-5897-47d1-bf5c-92683a027b35&utm_source=audiopod-sdk-node)
+
+Want to see a response before installing anything? The **Getting Started**
+collection reaches a real `200` in two requests with no account and no API key.
+[More about the collections](https://docs.audiopod.ai/sdks/postman).
 
 ## Installation
 
