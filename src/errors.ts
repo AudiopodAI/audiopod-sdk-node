@@ -3,6 +3,11 @@
  */
 
 export class AudioPodError extends Error {
+  detail?: unknown;
+  code?: string;
+  action?: string;
+  retryAfter?: string;
+  statusCode?: number;
   constructor(message: string) {
     super(message);
     this.name = 'AudioPodError';
@@ -21,11 +26,22 @@ export class AuthenticationError extends AudioPodError {
 export class APIError extends AudioPodError {
   statusCode?: number;
 
-  constructor(message: string, statusCode?: number) {
+  constructor(message: string, statusCode?: number, detail?: unknown, retryAfter?: string) {
     super(message);
     this.name = 'APIError';
     this.statusCode = statusCode;
+    attachDetails(this, detail, retryAfter);
     Object.setPrototypeOf(this, APIError.prototype);
+  }
+}
+
+export function attachDetails(error: AudioPodError, detail?: unknown, retryAfter?: string): void {
+  error.detail = detail;
+  error.retryAfter = retryAfter;
+  if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+    const values = detail as Record<string, unknown>;
+    error.code = typeof values.code === 'string' ? values.code : undefined;
+    error.action = typeof values.action === 'string' ? values.action : undefined;
   }
 }
 

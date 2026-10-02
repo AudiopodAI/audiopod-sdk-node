@@ -25,6 +25,8 @@ import { stdin as input, stdout as output } from "node:process";
 
 import AudioPod from "./client";
 import type { StemMode } from "./types";
+import { AudioPodError } from './errors';
+import { VERSION } from './version';
 
 const CONFIG_DIR = join(homedir(), ".audiopod");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
@@ -128,6 +130,8 @@ async function downloadTo(url: string, dest: string): Promise<void> {
 }
 
 async function makeClient(args: Args): Promise<AudioPod> {
+  const accessToken = flagStr(args, 'access-token') ?? process.env.AUDIOPOD_ACCESS_TOKEN;
+  if (accessToken) return new AudioPod({ accessToken, baseUrl: flagStr(args,'base-url') ?? process.env.AUDIOPOD_BASE_URL });
   const apiKey = flagStr(args, "api-key") ?? (await loadApiKey());
   if (!apiKey) {
     process.stderr.write(
@@ -269,13 +273,92 @@ async function cmdClone(args: Args): Promise<void> {
     process.stderr.write("usage: audiopod clone <reference.wav> --name <voice_name>\n");
     process.exit(2);
   }
+  const admission = flagStr(args,'admission-token');
+  const key = flagStr(args,'idempotency-key');
+  if (!admission || !key) throw new Error('Clone requires --admission-token and retained --idempotency-key UUID');
   const client = await makeClient(args);
-  const voice = await client.voice.create({
-    name,
-    description: flagStr(args, "description") ?? "",
-    audioFile: reference,
-  });
+  const voice = await client.voice.registerReference({ name, audioFile: reference,
+    admission_token: admission, idempotency_key:key, language_code:flagStr(args,'language') });
   emit(args, voice);
+}
+
+async function workflowBody(args: Args): Promise<Record<string, any>> {
+  const file = flagStr(args,'body');
+  if (!file) return {};
+  const value = JSON.parse(await fs.readFile(file,'utf8'));
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('--body must contain a JSON object');
+  return value;
+}
+function requireConfirm(args: Args): void {
+  if (!flagBool(args,'confirm')) throw new Error('Explicit --confirm is required; first inspect the current quote or consent');
+}
+
+async function cmdDubbing(args: Args): Promise<void> {
+  const [action,id,extra] = args.positional;
+  if (['analyze','generate','retranslate','approve-review'].includes(action)) requireConfirm(args);
+  const body = await workflowBody(args);
+  const client = await makeClient(args);
+  const api = client.dubbing;
+  const actions: Record<string,()=>Promise<unknown>> = {
+    capabilities:()=>api.capabilities(), 'adopt-source':()=>api.adoptSource(id), source:()=>api.getSource(id),
+    'create-project':()=>api.createProject(body as any), projects:()=>api.listProjects(body), project:()=>api.getProject(id),
+    'delete-project':()=>api.deleteProject(id), 'project-voices':()=>api.projectVoices(id),
+    'create-edition':()=>api.createEdition(id,body as any), edition:()=>api.getEdition(id), 'save-edition':()=>api.saveEdition(id,body as any),
+    quote:()=>api.quote(id,flagBool(args,'retranslate')), analyze:()=>api.analyze(id,{...body,confirm:true} as any),
+    job:()=>api.getJob(id), generate:()=>api.generate(id,{...body,confirm:true} as any), retranslate:()=>api.retranslate(id,{...body,confirm:true} as any),
+    cancel:()=>api.cancel(id), 'retry-exports':()=>api.retryExports(id), events:()=>api.events(id,flagNum(args,'after',0)),
+    wait:()=>api.waitForJob(id,{timeout:flagNum(args,'timeout',300)*1000}),
+    'review-complete':()=>api.reviewComplete(id,body.expected_revision), folders:()=>api.listFolders(),
+    'create-folder':()=>api.createFolder(body as any), 'rename-folder':()=>api.renameFolder(id,body as any), 'delete-folder':()=>api.deleteFolder(id),
+    'move-project':()=>api.moveProject(id,body.folder_id), glossary:()=>api.getGlossary(body as any),
+    'set-glossary':()=>api.setGlossary(body.scope,body.policy), 'reset-glossary':()=>api.resetGlossary(body.scope,body.expected_version),
+    templates:()=>api.listTemplates(), 'save-template':()=>api.saveTemplate(id,body.label), 'from-template':()=>api.fromTemplate(body as any),
+    'invite-reviewer':()=>api.inviteReviewer(id,body.recipient_email), 'review-grants':()=>api.listReviewGrants(id), 'revoke-review-grant':()=>api.revokeReviewGrant(id),
+    review:()=>api.getReview(id), 'add-comment':()=>api.addComment(id,body as any), 'approve-review':()=>api.approveReview(id,body.expected_revision),
+    'review-comments':()=>api.listReviewComments(id),
+  };
+  const media: Record<string,()=>Promise<Buffer>> = {
+    'source-media':()=>api.sourceMedia(id), artifact:()=>api.artifact(id,extra as any), 'review-media':()=>api.reviewMedia(id,extra as any),
+  };
+  if (media[action]) {
+    const destination = flagStr(args,'out');
+    if (!destination) throw new Error('Media commands require --out');
+    await fs.writeFile(destination,await media[action]());
+    emit(args,{path:destination});
+  } else {
+    if (!actions[action]) throw new Error('Unknown dubbing action');
+    emit(args,await actions[action]());
+  }
+}
+
+async function cmdVoiceWorkflow(args: Args): Promise<void> {
+  const [action,id] = args.positional;
+  const body = await workflowBody(args);
+  if (['consent-create','consent-accept','admit','audition-accept'].includes(action)) requireConfirm(args);
+  const client = await makeClient(args);
+  const api = client.voice;
+  const actions: Record<string,()=>Promise<unknown>> = {
+    capabilities:()=>api.capabilities(id,(flagStr(args,'operation') ?? 'tts') as any),
+    diagnostics:()=>api.referenceDiagnostics({audioFile:id,cropStartSeconds:flagNum(args,'crop-start',0),cropEndSeconds:flagStr(args,'crop-end') ? Number(flagStr(args,'crop-end')):undefined}),
+    'consent-create':()=>api.createConsent({...body,confirm:true} as any), consent:()=>api.getConsent(id),
+    'consent-preview':()=>api.previewConsentInvitation(id), 'consent-accept':()=>api.acceptConsentInvitation({...body,confirm:true} as any),
+    'consent-revoke':()=>api.revokeConsent(id,body.expected_revision), admit:()=>api.admitReference({...body,audioFile:id,confirm_transcription:true} as any),
+    'clone-status':()=>api.registrationStatus(id), metadata:()=>api.updateMetadata(id,body),
+    pronunciation:()=>api.getPronunciation(body as any), 'pronunciation-save':()=>api.setPronunciation(body.scope,body.policy),
+    'pronunciation-reset':()=>api.resetPronunciation(body.scope,body.expected_version), 'pronunciation-resolve':()=>api.resolvePronunciation(body.scope,body.text),
+    'audition-quote':()=>api.quoteAudition(id,body as any), 'audition-accept':()=>api.audition(id,{...body,confirm:true} as any),
+  };
+  if (!actions[action]) throw new Error('Unknown voice workflow action');
+  emit(args,await actions[action]());
+}
+async function cmdUploads(args: Args): Promise<void> {
+  const [action,file] = args.positional;
+  const body = await workflowBody(args);
+  const api = (await makeClient(args)).uploads;
+  if (action === 'limits') emit(args,await api.limits(flagStr(args,'service') ?? 'dubbing'));
+  else if (action === 'presign') emit(args,await api.presign(body as any));
+  else if (action === 'put') emit(args,await api.put(body as any,file));
+  else throw new Error('Unknown uploads action');
 }
 
 async function cmdJobs(args: Args): Promise<void> {
@@ -333,6 +416,19 @@ Commands:
   audiopod clone <ref.wav> --name N  Clone a voice.
   audiopod audiobook <file> --title  Produce an ACX audiobook.
   audiopod jobs <job_id>             Look up a job.
+  audiopod dubbing <action> [id]     Reviewed localization and private reuse.
+  audiopod voice <action> [id/file]  Capabilities, pronunciation, auditions, consent.
+  audiopod uploads <action> [file]   Limits, presign, and original-byte PUT.
+
+Workflow flags:
+  --body FILE     Exact JSON request; no automatic re-quote or confirmation.
+  --confirm       Explicit consent/paid action after reviewing its current quote.
+  --out FILE      Owner/reviewer media destination.
+  --retranslate   Quote an explicit translation-only rerun.
+  --access-token  Signed-in JWT; or AUDIOPOD_ACCESS_TOKEN.
+
+Clone requires --admission-token TOKEN --idempotency-key UUID. Keep the same
+UUID after an uncertain response; voice clone-status UUID reads recovery.
 
 Global flags:
   --api-key KEY    Override the saved API key.
@@ -347,6 +443,9 @@ const COMMANDS: Record<string, (a: Args) => Promise<void>> = {
   transcribe: cmdTranscribe,
   stems: cmdStems,
   clone: cmdClone,
+  dubbing: cmdDubbing,
+  voice: cmdVoiceWorkflow,
+  uploads: cmdUploads,
   audiobook: cmdAudiobook,
   jobs: cmdJobs,
 };
@@ -359,7 +458,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
   if (argv[0] === "--version" || argv[0] === "-v") {
     // Version is injected by tsup at build time via the package.json bundle.
     // For now read the running binary's process.env or fall back gracefully.
-    console.log(`audiopod ${process.env.AUDIOPOD_CLI_VERSION ?? "2.5.0"}`);
+    console.log(`audiopod ${VERSION}`);
     return;
   }
 
@@ -372,6 +471,11 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
   try {
     await handler(args);
   } catch (err) {
+    if (flagBool(args,'json') && err instanceof AudioPodError) {
+      process.stderr.write(JSON.stringify({error:{message:err.message,status_code:err.statusCode,code:err.code,action:err.action,detail:err.detail,retry_after:err.retryAfter}})+'\n');
+      process.exitCode = 1;
+      return;
+    }
     const msg = err instanceof Error ? err.message : String(err);
     process.stderr.write(`audiopod: ${msg}\n`);
     process.exit(1);

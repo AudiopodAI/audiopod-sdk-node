@@ -116,6 +116,7 @@ export interface Voice {
   preview_url?: string;
   is_public?: boolean;
   created_at?: string;
+  reference_revision?: number;
 }
 
 export interface VoiceCreateParams {
@@ -157,6 +158,11 @@ export interface TTSCreateParams {
   language?: string;
   /** Advanced directing controls (delivery mode, timestamps, normalization). */
   generationParams?: TTSGenerationParams;
+  /** Caller-scoped rule context; defaults to account rules. */
+  pronunciationProjectKind?: 'account' | 'tts' | 'podcast' | 'dubbing';
+  pronunciationProjectId?: string;
+  /** Expected resolved snapshot identity; stale rules return HTTP 409. */
+  pronunciationIdentity?: string;
 }
 
 // Voice Design Types
@@ -193,6 +199,8 @@ export interface VoiceDesignPublishParams {
 
 export interface TTSJob {
   id: number;
+  /** Canonical acceptance envelope ID; `id` remains a compatible SDK alias. */
+  job_id?: number;
   status: JobStatus;
   output_url?: string;
   output_path?: string;

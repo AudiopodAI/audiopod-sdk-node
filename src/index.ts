@@ -145,4 +145,13 @@ export {
   InsufficientBalanceError,
 } from './errors';
 
-export const VERSION = '2.6.0';
+export { VERSION } from './version';
+export * from './workflow-contracts';
+export type {
+  VoiceOperation, VoiceReadiness, VoiceCapabilities,
+  PronunciationProjectKind, PronunciationEntry, PronunciationScope,
+  PronunciationPolicyWrite, PronunciationPolicy, ResolvedPronunciation,
+  PronunciationResolution, ContextualAuditionParams, ContextualAuditionQuote,
+  ConfirmContextualAuditionParams,
+  ReferenceDiagnosticsParams, ReferenceDiagnostics,
+} from './voice-foundations';
