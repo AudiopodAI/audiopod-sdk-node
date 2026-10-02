@@ -99,6 +99,7 @@ export type {
   PodcastProject,
   PodcastSegment,
   PodcastDialogue,
+  PodcastTakeTiming,
   PodcastEpisodeProfileCreateParams,
   PodcastEpisodeProfileUpdateParams,
   PodcastSpeakerProfileCreateParams,

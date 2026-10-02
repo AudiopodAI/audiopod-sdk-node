@@ -800,9 +800,25 @@ export interface PodcastSegment {
 }
 
 export interface PodcastDialogue {
+  /** Existing dialogue identity; omit for a new line. */
+  id?: string;
   speaker: string;
   text: string;
   useTurbo?: boolean;
+  /** SHA256 of the accepted audible context; absent/null for legacy takes. */
+  take_identity?: string | null;
+  [key: string]: any;
+}
+
+/** Decoded WAV positions and provenance in the published episode. */
+export interface PodcastTakeTiming {
+  dialogue_id: string;
+  take_identity: string | null;
+  audio_sha256: string;
+  format: "wav";
+  start_frame: number;
+  end_frame: number;
+  sample_rate: number;
 }
 
 export interface PodcastEpisodeProfileCreateParams {
@@ -888,5 +904,7 @@ export interface PodcastGenerationProgress {
  *  stage, so only `id` is guaranteed here. */
 export interface PodcastProject {
   id: string;
+  dialogues?: PodcastDialogue[];
+  combined_timing?: PodcastTakeTiming[] | null;
   [key: string]: any;
 }

@@ -481,6 +481,19 @@ Full TypeScript support with exported types:
 import AudioPod, { StemExtractionJob, StemMode, WalletBalance } from "audiopod";
 ```
 
+## Podcast take metadata
+
+Podcast responses expose optional `dialogues[].take_identity` (a nullable
+SHA256) and `combined_timing` (a nullable list of `PodcastTakeTiming` entries).
+Each timing entry identifies its saved WAV and records `start_frame`,
+`end_frame` and `sample_rate`. Legacy responses can omit these fields.
+`updateTranscript` preserves an existing dialogue's `id` when you reuse project
+dialogues, so reordering can retain saved takes. Omit `id` for a new line.
+
+```typescript
+import type { PodcastDialogue, PodcastProject, PodcastTakeTiming } from "audiopod";
+```
+
 ## Documentation
 
 - [API Documentation](https://docs.audiopod.ai)

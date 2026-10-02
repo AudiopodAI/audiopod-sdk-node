@@ -199,6 +199,7 @@ export class Podcast {
   ): Promise<any> {
     return this.client.put(`${BASE}/projects/${projectId}/transcript`, {
       dialogues: dialogues.map((d) => ({
+        ...(d.id === undefined ? {} : { id: d.id }),
         speaker: d.speaker,
         text: d.text,
         use_turbo: d.useTurbo,
