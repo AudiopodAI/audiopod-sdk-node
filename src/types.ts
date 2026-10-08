@@ -440,7 +440,7 @@ export type MusicV3Cot = "full" | "melody";
 /** Which v3 entry point produced a job. */
 export type MusicV3Workflow = "generate" | "plan" | "edit" | "revise";
 
-/** An inclusive bar range. */
+/** A bar range, numbered from 1, both ends included. */
 export interface MusicV3Bars {
   start: number;
   end: number;
@@ -448,13 +448,16 @@ export interface MusicV3Bars {
 
 /** Params for `music.compose()` → `POST /api/v1/music/v3/plan` (score only, no audio). */
 export interface MusicV3ComposeParams {
-  /** Genre, instrumentation, mood, tempo feel, vocal character (1-2000 chars). */
-  style: string;
-  /** Lyrics, optionally with [Verse]/[Chorus] tags. Omit for an instrumental. Mutually exclusive with `description`. */
+  /**
+   * Genre, instrumentation, mood, tempo feel, vocal character (max 2000 chars).
+   * Required unless `description` is given, in which case it defaults to the description.
+   */
+  style?: string;
+  /** Your lyrics, optionally with [Verse]/[Chorus] tags. Omit for an instrumental. Cannot be combined with `description`. */
   lyrics?: string;
   /**
-   * COMING SOON — a plain-language brief to write the song from instead of
-   * lyrics. Mutually exclusive with `lyrics`. Rejected (422) until the server supports it.
+   * Describe the song (topic, mood, genre; 1-1000 chars) and AudioPod writes
+   * the lyrics first, within the same charge. Cannot be combined with `lyrics`.
    */
   description?: string;
   /** "full" (default) or "melody". */
@@ -465,32 +468,45 @@ export interface MusicV3ComposeParams {
   cfgScale?: number;
   /** Your own name for the track (max 200 chars). */
   displayName?: string;
-  /** COMING SOON — approximate target length in seconds. Rejected (422) until the server supports it. */
+  /**
+   * With `description`: roughly how long the song should be, 30-300 seconds.
+   * A guide, not a guarantee — the score's real length is `score.duration_seconds`.
+   */
   targetSeconds?: number;
-  /** COMING SOON — lyric/vocal language code. Rejected (422) until the server supports it. */
+  /** With `description`: ISO 639-1 code to write the lyrics in. Defaults to the description's language, else English. */
   language?: string;
 }
 
-/** Params for `music.reviseScore()` → `POST /api/v1/music/v3/revise` (COMING SOON). */
+/** Params for `music.reviseScore()` → `POST /api/v1/music/v3/revise`. */
 export interface MusicV3ReviseParams {
   /** The v3 job whose score you want revised. */
   sourceJobId: number;
-  /** What to change, in plain language (1-500 chars). */
+  /** What to change, in plain English (1-500 chars). */
   instruction: string;
-  /** Limit the revision to one section, e.g. "Chorus". */
+  /** Limit the change to one section by label (max 60 chars): "chorus" for every chorus, "chorus 2" for the second. */
   section?: string;
-  /** Limit the revision to a bar range. */
+  /** Limit the change to a bar range (numbered from 1, inclusive, 1-10000). */
   bars?: MusicV3Bars;
-  /** Permit the revision to change the tempo. */
+  /** Permit the revision to change the tempo (off by default). */
   allowTempoChange?: boolean;
+  /** Your own name for the revised score (max 200 chars). */
+  displayName?: string;
+  /**
+   * Sent as the `Idempotency-Key` header (max 200 chars). A retry with the same
+   * key within 10 minutes returns the first result and is not charged again.
+   */
+  idempotencyKey?: string;
 }
 
 /** Params for `music.recordScore()` → `POST /api/v1/music/v3/edit` (renders audio). */
 export interface MusicV3RecordParams {
   /** The job the score came from. */
   sourceJobId: number;
-  /** The COMPLETE score in ABC notation (not a fragment). */
-  abc: string;
+  /**
+   * The COMPLETE score in ABC notation (not a fragment). Omit to record the
+   * source job's own score as it is (the SDK fetches it with `getScore()`).
+   */
+  abc?: string;
   /** Replacement style text; omit to reuse the source's. */
   style?: string;
   /** Replacement lyrics; omit to reuse the source's. */
@@ -543,6 +559,8 @@ export interface MusicV3Score {
   editable: boolean;
   /** "plan" (written by AudioMusic) or "user" (you supplied it). */
   source?: string | null;
+  /** How long the music in this score runs, in seconds. */
+  duration_seconds?: number | null;
 }
 
 /** Notation-against-notation comparison with the score a job was derived from. */
@@ -552,9 +570,12 @@ export interface MusicV3ScoreComparison {
   /** Any of "pitches", "rhythm", "chords", "tempo", "structure". */
   changed: string[];
   tempo_change_allowed: boolean;
-  /** On a revision: which bars changed (COMING SOON with `reviseScore`). */
-  changed_bars?: number[] | MusicV3Bars[];
-  [key: string]: unknown;
+  /**
+   * On a revision: per voice (e.g. "Vocal", "Ins"), the bar ranges of the new
+   * score that differ from the source, as [start, end] pairs numbered from 1,
+   * inclusive. Absent on an edit.
+   */
+  changed_bars?: Record<string, Array<[number, number]>> | null;
 }
 
 export interface MusicV3Diagnostics {
@@ -583,6 +604,10 @@ export interface MusicV3Job {
   display_name?: string | null;
   style?: string | null;
   lyrics?: string | null;
+  /** Who wrote `lyrics`: "audiopod" (from your description) or "user". Absent for instrumentals. */
+  lyrics_source?: "audiopod" | "user" | null;
+  /** The length asked for on a described plan, if any. */
+  target_seconds?: number | null;
   cot?: MusicV3Cot | null;
   audio_url?: string | null;
   audio_urls: Record<string, string>;
@@ -593,13 +618,17 @@ export interface MusicV3Job {
   billing: MusicV3Billing;
   source_job_id?: number | null;
   error_message?: string | null;
+  /** A one-sentence note on the result — on a revision, what changed. */
   note?: string | null;
   created_at?: string | null;
   completed_at?: string | null;
 }
 
 export interface MusicV3Availability {
+  /** Whether AudioMusic v3 is offered. Hide the v3 surface when false. */
   available: boolean;
+  /** Whether plain-English score revision (`reviseScore`) is offered. Hide revise controls when false. */
+  revise: boolean;
 }
 
 // Stem Extraction Types

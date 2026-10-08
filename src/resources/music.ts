@@ -33,8 +33,14 @@ const DEFAULT_TIMEOUT = 600000; // 10 minutes
 
 const V3 = '/api/v1/music/v3';
 const V3_DEFAULT_TIMEOUT = 900000; // 15 minutes
-/** Longest `instruction` `reviseScore()` accepts. */
+/** Server limits mirrored client-side so bad input fails before a request. */
 export const MAX_REVISE_INSTRUCTION_CHARS = 500;
+export const MAX_REVISE_SECTION_CHARS = 60;
+export const MAX_BAR = 10000;
+export const MAX_IDEMPOTENCY_KEY_CHARS = 200;
+export const MAX_DESCRIPTION_CHARS = 1000;
+export const MIN_TARGET_SECONDS = 30;
+export const MAX_TARGET_SECONDS = 300;
 
 /** Drop undefined/null so unset optional fields are never sent. */
 function compact(obj: Record<string, unknown>): Record<string, unknown> {
@@ -306,39 +312,68 @@ export class Music {
   // The usual loop: compose (score only) -> reviseScore / hand-edit ->
   // recordScore (render audio). generateV3 does score + audio in one call.
   // There is no `duration`: length follows the lyrics and the score.
+  //
+  // Server refusals arrive as `APIError` (with `statusCode`); the `detail.code`
+  // values each method can return are listed on it. Nothing is charged for any
+  // of them.
   // ---------------------------------------------------------------------------
 
   /**
-   * Whether score-first music (AudioMusic v3) is offered. Always answers, even
-   * where v3 is switched off — hide your v3 surface when `available` is false.
+   * Whether score-first music (AudioMusic v3) is offered, and whether score
+   * revision is. Always answers, even where v3 is switched off — hide your v3
+   * surface when `available` is false, and the revise controls when `revise` is.
    */
   async v3Availability(): Promise<MusicV3Availability> {
     return this.client.get(`${V3}/availability`);
   }
 
   /**
-   * Write a score only — no audio (`POST /api/v1/music/v3/plan`). Review or
-   * revise it, then render it with `recordScore()`.
+   * Write a score only — no audio (`POST /api/v1/music/v3/plan`). Bring your
+   * own `lyrics` (or none, for an instrumental), or send a `description` and
+   * AudioPod writes the lyrics first, within the same charge. Review or revise
+   * the score, then render it with `recordScore()`.
    *
-   * `description`, `targetSeconds` and `language` are COMING SOON and are
-   * rejected (422) until the server supports them.
+   * Error codes: 422 `LYRICS_FAILED` (lyrics could not be written), 422
+   * `DESCRIPTION_NOT_ALLOWED` (the description asks to reproduce an existing
+   * song's words), 503 `LYRICS_BUSY` (retry after `Retry-After`).
    *
    * @example
    * ```typescript
-   * const plan = await client.music.compose({ style: 'warm indie folk', lyrics: '[Verse]\n...' });
+   * const plan = await client.music.compose({ description: 'a hopeful folk song about leaving home', targetSeconds: 150 });
    * const ready = await client.music.waitForV3Job(plan.job_id);
    * ```
    */
   async compose(params: MusicV3ComposeParams): Promise<MusicV3Job> {
-    if (params.lyrics && params.description) {
-      throw new ValidationError('Pass either lyrics or description, not both.');
+    let lyrics = params.lyrics;
+    if (params.description !== undefined) {
+      if (!params.description.trim()) {
+        throw new ValidationError('description must not be blank.');
+      }
+      if (params.description.length > MAX_DESCRIPTION_CHARS) {
+        throw new ValidationError(`description must be at most ${MAX_DESCRIPTION_CHARS} characters.`);
+      }
+      if (lyrics && lyrics.trim()) {
+        throw new ValidationError('Pass either description (AudioPod writes the lyrics) or lyrics, not both.');
+      }
+      lyrics = undefined; // an empty lyrics string must not ride along with a description
+    } else if (!params.style || !params.style.trim()) {
+      throw new ValidationError('style is required unless description is given.');
+    }
+    if (
+      params.targetSeconds !== undefined &&
+      (!Number.isInteger(params.targetSeconds) ||
+        params.targetSeconds < MIN_TARGET_SECONDS ||
+        params.targetSeconds > MAX_TARGET_SECONDS)
+    ) {
+      throw new ValidationError(
+        `targetSeconds must be an integer between ${MIN_TARGET_SECONDS} and ${MAX_TARGET_SECONDS}.`,
+      );
     }
     return this.client.post(
       `${V3}/plan`,
       compact({
         style: params.style,
-        // An empty lyrics string must not ride along with a description.
-        lyrics: params.description !== undefined && !params.lyrics ? undefined : params.lyrics,
+        lyrics,
         description: params.description,
         cot: params.cot,
         seed: params.seed,
@@ -351,12 +386,19 @@ export class Music {
   }
 
   /**
-   * Revise a job's score from a plain-language instruction
-   * (`POST /api/v1/music/v3/revise`). Produces a new score-only job whose
-   * `score_comparison` says what changed, including `changed_bars`.
+   * Change a score in plain English (`POST /api/v1/music/v3/revise`).
+   * Available when enabled for your account — check `(await v3Availability()).revise`.
    *
-   * COMING SOON: the server side is still rolling out; until it does, this
-   * call answers 404.
+   * The result is a NEW score-only job (`workflow: "revise"`) linked to the
+   * source; the original is kept. `note` says what changed and
+   * `score_comparison.changed_bars` says where (`{ voice: [[start, end], ...] }`,
+   * bars numbered from 1, inclusive). Each revision is a small fixed charge,
+   * kept only if a revised score is delivered.
+   *
+   * Error codes: 409 `REVISE_IN_FLIGHT`, 422 `REVISE_TARGET_NOT_FOUND`, 422
+   * `REVISE_FAILED` (rephrase or narrow it), 422 `INVALID_SCORE`, 422
+   * `IDEMPOTENCY_KEY_REUSED`, 429 `REVISE_RATE_LIMITED` (wait `Retry-After`),
+   * 503 `REVISE_UNAVAILABLE`. 404 when the source is not yours or has no score.
    */
   async reviseScore(params: MusicV3ReviseParams): Promise<MusicV3Job> {
     const instruction = params.instruction ?? '';
@@ -368,42 +410,66 @@ export class Music {
         `instruction must be at most ${MAX_REVISE_INSTRUCTION_CHARS} characters (got ${instruction.length}).`,
       );
     }
+    if (params.section !== undefined && params.section.length > MAX_REVISE_SECTION_CHARS) {
+      throw new ValidationError(`section must be at most ${MAX_REVISE_SECTION_CHARS} characters.`);
+    }
     let bars: { start: number; end: number } | undefined;
     if (params.bars !== undefined) {
       const { start, end } = params.bars;
-      if (!Number.isInteger(start) || !Number.isInteger(end) || start > end) {
-        throw new ValidationError('bars must be { start: integer, end: integer } with start <= end.');
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || start > end || end > MAX_BAR) {
+        throw new ValidationError(`bars must be integers with 1 <= start <= end <= ${MAX_BAR}.`);
       }
       bars = { start, end };
     }
-    return this.client.post(
-      `${V3}/revise`,
-      compact({
-        source_job_id: params.sourceJobId,
-        instruction,
-        section: params.section,
-        bars,
-        allow_tempo_change: params.allowTempoChange,
-      }),
-    );
+    let headers: Record<string, string> | undefined;
+    if (params.idempotencyKey !== undefined) {
+      const key = params.idempotencyKey.trim();
+      if (!key || key.length > MAX_IDEMPOTENCY_KEY_CHARS) {
+        throw new ValidationError(`idempotencyKey must be 1-${MAX_IDEMPOTENCY_KEY_CHARS} characters.`);
+      }
+      headers = { 'Idempotency-Key': key };
+    }
+    const body = compact({
+      source_job_id: params.sourceJobId,
+      instruction,
+      section: params.section,
+      bars,
+      allow_tempo_change: params.allowTempoChange,
+      display_name: params.displayName,
+    });
+    return headers
+      ? this.client.post(`${V3}/revise`, body, { headers })
+      : this.client.post(`${V3}/revise`, body);
   }
 
   /**
-   * Render audio from a complete score (`POST /api/v1/music/v3/edit`).
+   * Render audio from a score (`POST /api/v1/music/v3/edit`).
+   *
+   * Omit `abc` to record the source job's own score as it is (fetched with
+   * `getScore()` first) — the usual step after `compose()` or `reviseScore()`.
+   * Pass `abc` to record a hand-edited score; it must be the COMPLETE score.
    *
    * Records a new take: sections you did not change are still performed
    * afresh. An identical request for the same source still in progress is
-   * refused with 409 (`SCORE_ALREADY_RECORDING`) — poll that job instead.
+   * refused with 409 `SCORE_ALREADY_RECORDING` — poll that job instead.
    */
   async recordScore(params: MusicV3RecordParams): Promise<MusicV3Job> {
-    if (!params.abc || !params.abc.trim()) {
-      throw new ValidationError('abc must be a complete, non-empty score.');
+    let abc = params.abc;
+    if (abc !== undefined && !abc.trim()) {
+      throw new ValidationError('abc must be a complete, non-empty score (or omit it).');
+    }
+    if (abc === undefined) {
+      const score = await this.getScore(params.sourceJobId);
+      abc = typeof score?.abc === 'string' ? score.abc.trim() : '';
+      if (!abc) {
+        throw new ValidationError(`Job ${params.sourceJobId} has no score to record; pass abc explicitly.`);
+      }
     }
     return this.client.post(
       `${V3}/edit`,
       compact({
         source_job_id: params.sourceJobId,
-        abc: params.abc,
+        abc,
         style: params.style,
         lyrics: params.lyrics,
         cot: params.cot,
@@ -441,7 +507,8 @@ export class Music {
   }
 
   /**
-   * Just a job's score. Throws an `APIError` (404, `NO_SCORE`) when the job
+   * Just a job's score (`abc`, `abc_url`, `midi_url`, `editable`, `source`,
+   * `duration_seconds`). Throws an `APIError` (404, `NO_SCORE`) when the job
    * has no score yet.
    */
   async getScore(jobId: number): Promise<MusicV3Score> {

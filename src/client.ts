@@ -158,8 +158,14 @@ export default class AudioPod {
   }
 
   /** @internal Make a POST request */
-  async post<T = any>(endpoint: string, data?: any): Promise<T> {
-    const response = await this._axios.post(endpoint, data);
+  async post<T = any>(
+    endpoint: string,
+    data?: any,
+    options?: { headers?: Record<string, string> }
+  ): Promise<T> {
+    const response = options?.headers
+      ? await this._axios.post(endpoint, data, { headers: options.headers })
+      : await this._axios.post(endpoint, data);
     return response.data;
   }
 

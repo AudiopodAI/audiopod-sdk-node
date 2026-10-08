@@ -17,6 +17,7 @@ interface Call {
   method: 'GET' | 'POST';
   endpoint: string;
   data?: unknown;
+  options?: unknown;
 }
 
 function makeResource(...responses: unknown[]) {
@@ -28,8 +29,8 @@ function makeResource(...responses: unknown[]) {
       calls.push({ method: 'GET', endpoint, data: params });
       return next();
     },
-    async post(endpoint: string, data?: unknown) {
-      calls.push({ method: 'POST', endpoint, data });
+    async post(endpoint: string, data?: unknown, options?: unknown) {
+      calls.push(options === undefined ? { method: 'POST', endpoint, data } : { method: 'POST', endpoint, data, options });
       return next();
     },
   };
@@ -57,15 +58,35 @@ test('compose POSTs /plan with snake_case and only the fields given', async () =
   });
 });
 
-test('compose sends the coming-soon fields when given, dropping empty lyrics', async () => {
+test('compose from a description sends the brief fields, dropping empty lyrics', async () => {
   const { music, calls } = makeResource({ job_id: 1, status: 'PENDING' });
   await music.compose({ style: 'folk', lyrics: '', description: 'rain', targetSeconds: 90, language: 'en' });
   assert.deepEqual(calls[0].data, { style: 'folk', description: 'rain', target_seconds: 90, language: 'en' });
 });
 
-test('compose rejects lyrics and description together without a request', async () => {
+test('compose with only a description needs no style', async () => {
+  const { music, calls } = makeResource({ job_id: 1, status: 'PENDING' });
+  await music.compose({ description: 'a lullaby about the sea', targetSeconds: 30 });
+  await music.compose({ description: 'a lullaby about the sea', targetSeconds: 300 });
+  assert.deepEqual(calls[0].data, { description: 'a lullaby about the sea', target_seconds: 30 });
+  assert.equal(calls.length, 2);
+});
+
+test('compose validation rejects bad input without a request', async () => {
   const { music, calls } = makeResource();
-  await assert.rejects(() => music.compose({ style: 'x', lyrics: 'la', description: 'rain' }), ValidationError);
+  const bad = [
+    { style: 'x', lyrics: 'la', description: 'rain' },
+    { description: '   ' },
+    { description: 'x'.repeat(1001) },
+    {},
+    { style: '  ' },
+    { description: 'rain', targetSeconds: 29 },
+    { description: 'rain', targetSeconds: 301 },
+    { description: 'rain', targetSeconds: 90.5 },
+  ];
+  for (const params of bad) {
+    await assert.rejects(() => music.compose(params as any), ValidationError, JSON.stringify(params));
+  }
   assert.equal(calls.length, 0);
 });
 
@@ -77,6 +98,8 @@ test('reviseScore POSTs /revise with the full body', async () => {
     section: 'Chorus',
     bars: { start: 9, end: 16 },
     allowTempoChange: false,
+    displayName: 'Rev A',
+    idempotencyKey: ' key-123 ',
   });
   assert.equal(calls[0].endpoint, `${V3}/revise`);
   assert.deepEqual(calls[0].data, {
@@ -85,7 +108,27 @@ test('reviseScore POSTs /revise with the full body', async () => {
     section: 'Chorus',
     bars: { start: 9, end: 16 },
     allow_tempo_change: false,
+    display_name: 'Rev A',
   });
+  assert.deepEqual(calls[0].options, { headers: { 'Idempotency-Key': 'key-123' } });
+});
+
+test('reviseScore without a key sends no options', async () => {
+  const { music, calls } = makeResource({ job_id: 9, status: 'PENDING' });
+  await music.reviseScore({ sourceJobId: 5, instruction: 'brighter' });
+  assert.deepEqual(calls[0], {
+    method: 'POST',
+    endpoint: `${V3}/revise`,
+    data: { source_job_id: 5, instruction: 'brighter' },
+  });
+});
+
+test('reviseScore rejects a long section or a bad idempotency key', async () => {
+  const { music, calls } = makeResource();
+  await assert.rejects(() => music.reviseScore({ sourceJobId: 5, instruction: 'x', section: 's'.repeat(61) }), ValidationError);
+  await assert.rejects(() => music.reviseScore({ sourceJobId: 5, instruction: 'x', idempotencyKey: 'k'.repeat(201) }), ValidationError);
+  await assert.rejects(() => music.reviseScore({ sourceJobId: 5, instruction: 'x', idempotencyKey: '  ' }), ValidationError);
+  assert.equal(calls.length, 0);
 });
 
 test('reviseScore enforces the 500-char instruction limit', async () => {
@@ -106,15 +149,39 @@ test('reviseScore rejects a bad bar range', async () => {
     () => music.reviseScore({ sourceJobId: 5, instruction: 'x', bars: { start: 1.5, end: 2 } }),
     ValidationError,
   );
+  await assert.rejects(
+    () => music.reviseScore({ sourceJobId: 5, instruction: 'x', bars: { start: 0, end: 2 } }),
+    ValidationError,
+  );
+  await assert.rejects(
+    () => music.reviseScore({ sourceJobId: 5, instruction: 'x', bars: { start: 1, end: 10001 } }),
+    ValidationError,
+  );
   assert.equal(calls.length, 0);
 });
 
-test('recordScore POSTs /edit and requires a score', async () => {
+test('recordScore POSTs /edit and rejects a blank score', async () => {
   const { music, calls } = makeResource({ job_id: 11, status: 'PENDING' });
   await music.recordScore({ sourceJobId: 5, abc: 'X:1\nK:C\nCDEF|', allowTempoChange: true });
   assert.equal(calls[0].endpoint, `${V3}/edit`);
   assert.deepEqual(calls[0].data, { source_job_id: 5, abc: 'X:1\nK:C\nCDEF|', allow_tempo_change: true });
   await assert.rejects(() => music.recordScore({ sourceJobId: 5, abc: ' ' }), ValidationError);
+  assert.equal(calls.length, 1);
+});
+
+test('recordScore without abc fetches the source score first', async () => {
+  const { music, calls } = makeResource({ abc: 'X:1\nK:C\nG|\n', editable: true }, { job_id: 12, status: 'PENDING' });
+  const job = await music.recordScore({ sourceJobId: 5, style: 'jazz' });
+  assert.equal(job.job_id, 12);
+  assert.deepEqual(calls, [
+    { method: 'GET', endpoint: `${V3}/jobs/5/score`, data: undefined },
+    { method: 'POST', endpoint: `${V3}/edit`, data: { source_job_id: 5, abc: 'X:1\nK:C\nG|', style: 'jazz' } },
+  ]);
+});
+
+test('recordScore without abc on a scoreless source throws before /edit', async () => {
+  const { music, calls } = makeResource({ abc: null, editable: false });
+  await assert.rejects(() => music.recordScore({ sourceJobId: 5 }), ValidationError);
   assert.equal(calls.length, 1);
 });
 
@@ -173,4 +240,19 @@ test('v2 create does not send quality unless set', async () => {
   assert.equal((calls[0].data as Record<string, unknown>).quality, undefined);
   await music.create({ prompt: 'ambient', quality: 'premium' });
   assert.equal((calls[1].data as Record<string, unknown>).quality, 'premium');
+});
+
+// --- transport: the Idempotency-Key header reaches axios ---------------------
+
+test('AudioPod.post forwards per-request headers to axios', async () => {
+  const { default: AudioPod } = await import('../src/client');
+  const client = new AudioPod({ apiKey: 'ap_test' });
+  const seen: unknown[][] = [];
+  (client as any)._axios.post = async (...args: unknown[]) => {
+    seen.push(args);
+    return { data: { job_id: 1, status: 'PENDING' } };
+  };
+  await client.music.reviseScore({ sourceJobId: 5, instruction: 'brighter', idempotencyKey: 'abc' });
+  assert.equal(seen[0][0], `${V3}/revise`);
+  assert.deepEqual(seen[0][2], { headers: { 'Idempotency-Key': 'abc' } });
 });

@@ -7,20 +7,22 @@
 New `client.music` methods for AudioMusic v3, where the song is written as an
 editable score (ABC notation) first and the audio is rendered from it:
 
-- `v3Availability()` — whether v3 is offered.
-- `compose()` — write a score only, no audio (`POST /music/v3/plan`).
-- `reviseScore()` — revise a score from a plain-language instruction
-  (`POST /music/v3/revise`, coming soon on the server; 404 until then).
-  `instruction` is limited to 500 characters client-side.
-- `recordScore()` — render audio from a complete score (`POST /music/v3/edit`).
+- `v3Availability()` — `{ available, revise }`: whether v3, and score
+  revision, are offered for your account.
+- `compose()` — write a score only, no audio (`POST /music/v3/plan`). Bring
+  your own `lyrics`, or send a `description` (with optional `targetSeconds`
+  30–300 and `language`) and AudioPod writes the lyrics first.
+- `reviseScore()` — change a score in plain English (`POST /music/v3/revise`),
+  narrowed by `section` or `bars`; returns a new score-only job whose
+  `score_comparison.changed_bars` is `{ voice: [[start, end], ...] }`. Available
+  when enabled for your account. `idempotencyKey` is sent as the
+  `Idempotency-Key` header.
+- `recordScore()` — render audio from a score (`POST /music/v3/edit`). Omit
+  `abc` to record the source job's score as it is (fetched via `getScore()`).
 - `generateV3()` — score and audio in one call (`POST /music/v3/generate`).
 - `getV3Job()`, `getScore()`, `listV3Jobs()`, `waitForV3Job()`.
 - Typed `MusicV3*` params and response interfaces, and a `ValidationError`
-  thrown before any request when arguments are invalid.
-
-`compose` also accepts `description` (mutually exclusive with `lyrics`),
-`targetSeconds` and `language`; these are coming soon on the server and are
-rejected (422) until then. They are only sent when you set them.
+  thrown before any request when arguments break the server's limits.
 
 ### Changed
 
