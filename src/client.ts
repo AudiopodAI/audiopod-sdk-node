@@ -29,7 +29,7 @@ import { Midi } from "./resources/midi";
 import { Podcast } from "./resources/podcast";
 import { Reader } from "./resources/reader";
 
-const VERSION = "2.1.0";
+const VERSION = "2.10.0";
 const DEFAULT_BASE_URL = "https://api.audiopod.ai";
 const DEFAULT_TIMEOUT = 60000;
 
@@ -158,8 +158,14 @@ export default class AudioPod {
   }
 
   /** @internal Make a POST request */
-  async post<T = any>(endpoint: string, data?: any): Promise<T> {
-    const response = await this._axios.post(endpoint, data);
+  async post<T = any>(
+    endpoint: string,
+    data?: any,
+    options?: { headers?: Record<string, string> }
+  ): Promise<T> {
+    const response = options?.headers
+      ? await this._axios.post(endpoint, data, { headers: options.headers })
+      : await this._axios.post(endpoint, data);
     return response.data;
   }
 

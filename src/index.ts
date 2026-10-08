@@ -50,6 +50,23 @@ export type {
   MusicQuality,
   MusicJob,
 
+  // Score-first music (AudioMusic v3)
+  MusicV3Cot,
+  MusicV3Workflow,
+  MusicV3Bars,
+  MusicV3ComposeParams,
+  MusicV3ReviseParams,
+  MusicV3RecordParams,
+  MusicV3GenerateParams,
+  MusicV3ListParams,
+  MusicV3WaitOptions,
+  MusicV3Score,
+  MusicV3ScoreComparison,
+  MusicV3Diagnostics,
+  MusicV3Billing,
+  MusicV3Job,
+  MusicV3Availability,
+
   // Stem Extraction
   StemExtractionParams,
   StemExtractionJob,
@@ -143,6 +160,7 @@ export {
   APIError,
   RateLimitError,
   InsufficientBalanceError,
+  ValidationError,
 } from './errors';
 
-export const VERSION = '2.6.0';
+export const VERSION = '2.10.0';

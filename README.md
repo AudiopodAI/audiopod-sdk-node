@@ -90,6 +90,71 @@ const job = await client.music.generate({
 const song = await client.music.waitForCompletion(job.id);
 ```
 
+Every plan now gets the highest-quality music model at the standard rate, so
+the old `quality` option is no longer needed. It is still accepted for
+compatibility and is only sent when you set it.
+
+### Score-first music (v3)
+
+AudioMusic v3 writes the song as an editable score (ABC notation) first and
+renders the audio from that score, so you can read and change the music itself
+before paying for a recording. There is no `duration`: length follows the
+lyrics and the score.
+
+```typescript
+const caps = await client.music.v3Availability(); // { available, revise }
+if (caps.available) {
+  // 1. Write the score only (no audio). Bring your own lyrics, or describe
+  //    the song and AudioPod writes the lyrics first.
+  let plan = await client.music.compose({
+    description: "a hopeful folk song about leaving a harbour town at dawn",
+    targetSeconds: 150,
+  });
+  plan = await client.music.waitForV3Job(plan.job_id);
+
+  // 2. Optional: change it in plain English (when enabled for your account)
+  if (caps.revise) {
+    const job = await client.music.reviseScore({
+      sourceJobId: plan.job_id,
+      instruction: "make the chorus higher",
+      section: "chorus",
+      idempotencyKey: "my-retry-safe-key",
+    });
+    plan = await client.music.waitForV3Job(job.job_id);
+    console.log(plan.note, plan.score_comparison?.changed_bars); // { Vocal: [[9, 16]] }
+  }
+
+  // 3. Record the score as audio (omit abc to record the score as it is)
+  const take = await client.music.recordScore({ sourceJobId: plan.job_id });
+  const song = await client.music.waitForV3Job(take.job_id);
+  console.log(song.audio_url);
+}
+```
+
+| Method | Endpoint |
+|---|---|
+| `v3Availability()` | `GET /api/v1/music/v3/availability` |
+| `compose({ style?, lyrics?, description?, targetSeconds?, language?, ... })` | `POST /api/v1/music/v3/plan` (score only) |
+| `reviseScore({ sourceJobId, instruction, section?, bars?, idempotencyKey?, ... })` | `POST /api/v1/music/v3/revise` (score only) |
+| `recordScore({ sourceJobId, abc?, ... })` | `POST /api/v1/music/v3/edit` (renders audio) |
+| `generateV3({ style, lyrics?, abc?, ... })` | `POST /api/v1/music/v3/generate` (score + audio) |
+| `getV3Job(id)` / `getScore(id)` | `GET /api/v1/music/v3/jobs/{id}` / `.../score` |
+| `listV3Jobs({ workflow?, sourceJobId? })` | `GET /api/v1/music/v3/jobs` |
+| `waitForV3Job(id, { timeout?, pollInterval? })` | polls until `COMPLETED` |
+
+Checked client-side before any request (throws `ValidationError`): `lyrics`
+and `description` are mutually exclusive, `style` is required without a
+`description`, `targetSeconds` is 30–300, `instruction` is 1–500 characters,
+`section` at most 60, `bars` 1–10000 with start ≤ end, and `idempotencyKey`
+(sent as the `Idempotency-Key` header) at most 200.
+
+Server error codes (in the `APIError` message; nothing is charged for any of
+them): `LYRICS_FAILED` (422), `LYRICS_BUSY` (503), `DESCRIPTION_NOT_ALLOWED`
+(422) on `compose`; `REVISE_FAILED` (422), `REVISE_TARGET_NOT_FOUND` (422),
+`REVISE_IN_FLIGHT` (409), `IDEMPOTENCY_KEY_REUSED` (422), `REVISE_RATE_LIMITED`
+(429), `REVISE_UNAVAILABLE` (503) on `reviseScore`; `SCORE_ALREADY_RECORDING`
+(409) on `recordScore`.
+
 ## Stem Separation
 
 Extract individual audio components from a mixed recording.
