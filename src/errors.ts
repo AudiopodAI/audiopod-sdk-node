@@ -53,3 +53,12 @@ export class InsufficientBalanceError extends AudioPodError {
     Object.setPrototypeOf(this, InsufficientBalanceError.prototype);
   }
 }
+
+/** Thrown before any request is sent when arguments are invalid. */
+export class ValidationError extends AudioPodError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ValidationError';
+    Object.setPrototypeOf(this, ValidationError.prototype);
+  }
+}

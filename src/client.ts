@@ -29,7 +29,7 @@ import { Midi } from "./resources/midi";
 import { Podcast } from "./resources/podcast";
 import { Reader } from "./resources/reader";
 
-const VERSION = "2.1.0";
+const VERSION = "2.10.0";
 const DEFAULT_BASE_URL = "https://api.audiopod.ai";
 const DEFAULT_TIMEOUT = 60000;
 

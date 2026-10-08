@@ -90,6 +90,58 @@ const job = await client.music.generate({
 const song = await client.music.waitForCompletion(job.id);
 ```
 
+Every plan now gets the highest-quality music model at the standard rate, so
+the old `quality` option is no longer needed. It is still accepted for
+compatibility and is only sent when you set it.
+
+### Score-first music (v3)
+
+AudioMusic v3 writes the song as an editable score (ABC notation) first and
+renders the audio from that score, so you can read and change the music itself
+before paying for a recording. There is no `duration`: length follows the
+lyrics and the score.
+
+```typescript
+if ((await client.music.v3Availability()).available) {
+  // 1. Write the score only (no audio)
+  const plan = await client.music.compose({
+    style: "warm indie folk, fingerpicked guitar, soft male vocal",
+    lyrics: "[Verse]\nMorning light on the harbour...",
+  });
+  await client.music.waitForV3Job(plan.job_id);
+
+  // 2. Optional: revise it in plain language (coming soon)
+  const revised = await client.music.reviseScore({
+    sourceJobId: plan.job_id,
+    instruction: "make the chorus lift, keep the verse as is",
+  });
+  await client.music.waitForV3Job(revised.job_id);
+
+  // 3. Record the (complete) score as audio
+  const score = await client.music.getScore(revised.job_id);
+  const take = await client.music.recordScore({ sourceJobId: revised.job_id, abc: score.abc! });
+  const song = await client.music.waitForV3Job(take.job_id);
+  console.log(song.audio_url);
+}
+```
+
+| Method | Endpoint |
+|---|---|
+| `v3Availability()` | `GET /api/v1/music/v3/availability` |
+| `compose({ style, lyrics?, ... })` | `POST /api/v1/music/v3/plan` (score only) |
+| `reviseScore({ sourceJobId, instruction, section?, bars? })` | `POST /api/v1/music/v3/revise` |
+| `recordScore({ sourceJobId, abc, ... })` | `POST /api/v1/music/v3/edit` (renders audio) |
+| `generateV3({ style, lyrics?, abc?, ... })` | `POST /api/v1/music/v3/generate` (score + audio) |
+| `getV3Job(id)` / `getScore(id)` | `GET /api/v1/music/v3/jobs/{id}` / `.../score` |
+| `listV3Jobs({ workflow?, sourceJobId? })` | `GET /api/v1/music/v3/jobs` |
+| `waitForV3Job(id, { timeout?, pollInterval? })` | polls until `COMPLETED` |
+
+**Coming soon:** `reviseScore` and the `description` / `targetSeconds` /
+`language` options of `compose` are rolling out on the server; until they do,
+those calls answer 404 / 422. `instruction` is at most 500 characters, and
+`lyrics` and `description` are mutually exclusive (checked client-side, throws
+`ValidationError`).
+
 ## Stem Separation
 
 Extract individual audio components from a mixed recording.

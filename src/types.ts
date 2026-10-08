@@ -220,8 +220,11 @@ export type MusicTask =
 export type AudioFormat = "wav" | "mp3" | "flac" | "ogg";
 export type InferMethod = "ode" | "sde";
 export type ModelVersion = "audiomusic-v2" | "audiomusic-v1.5";
-/** Public generation-quality tier. "standard" is the default for all users;
- *  "premium" (higher-fidelity) requires an eligible plan. */
+/**
+ * @deprecated Every plan now gets the highest-quality music model at the
+ * standard rate, so there is nothing to choose. Kept so existing code that
+ * passes `quality` keeps compiling.
+ */
 export type MusicQuality = "standard" | "premium";
 
 export interface MusicCreateParams {
@@ -287,7 +290,10 @@ export interface MusicCreateParams {
   generateLrc?: boolean;
   /** URL for track thumbnail image */
   thumbnailUrl?: string;
-  /** Generation quality tier: "standard" (default) or "premium" (higher-fidelity). */
+  /**
+   * @deprecated No longer needed: every plan now gets the highest-quality music
+   * model at the standard rate. Still accepted for compatibility; only sent when set.
+   */
   quality?: MusicQuality;
 }
 
@@ -304,7 +310,10 @@ export interface MusicSimpleParams {
   duration?: number;
   /** Output format. Default: "flac" */
   format?: AudioFormat;
-  /** Generation quality tier: "standard" (default) or "premium" (higher-fidelity). */
+  /**
+   * @deprecated No longer needed: every plan now gets the highest-quality music
+   * model at the standard rate. Still accepted for compatibility; only sent when set.
+   */
   quality?: MusicQuality;
 }
 
@@ -323,7 +332,10 @@ export interface MusicCoverParams {
   duration?: number;
   /** Output format. Default: "flac" */
   format?: AudioFormat;
-  /** Generation quality tier: "standard" (default) or "premium" (higher-fidelity). */
+  /**
+   * @deprecated No longer needed: every plan now gets the highest-quality music
+   * model at the standard rate. Still accepted for compatibility; only sent when set.
+   */
   quality?: MusicQuality;
 }
 
@@ -342,7 +354,10 @@ export interface MusicReferenceParams {
   duration?: number;
   /** Output format. Default: "flac" */
   format?: AudioFormat;
-  /** Generation quality tier: "standard" (default) or "premium" (higher-fidelity). */
+  /**
+   * @deprecated No longer needed: every plan now gets the highest-quality music
+   * model at the standard rate. Still accepted for compatibility; only sent when set.
+   */
   quality?: MusicQuality;
 }
 
@@ -411,6 +426,180 @@ export interface MusicJob {
   created_at?: string;
   updated_at?: string;
   completed_at?: string;
+}
+
+// Score-first music — AudioMusic v3
+//
+// Every v3 track starts as an editable score in ABC notation; audio is
+// rendered from the score. There is no `duration`: length follows the lyrics
+// and the score.
+
+/** How much is written as a score first: "full" (melody + harmony) or "melody" (the tune alone). */
+export type MusicV3Cot = "full" | "melody";
+
+/** Which v3 entry point produced a job. */
+export type MusicV3Workflow = "generate" | "plan" | "edit" | "revise";
+
+/** An inclusive bar range. */
+export interface MusicV3Bars {
+  start: number;
+  end: number;
+}
+
+/** Params for `music.compose()` → `POST /api/v1/music/v3/plan` (score only, no audio). */
+export interface MusicV3ComposeParams {
+  /** Genre, instrumentation, mood, tempo feel, vocal character (1-2000 chars). */
+  style: string;
+  /** Lyrics, optionally with [Verse]/[Chorus] tags. Omit for an instrumental. Mutually exclusive with `description`. */
+  lyrics?: string;
+  /**
+   * COMING SOON — a plain-language brief to write the song from instead of
+   * lyrics. Mutually exclusive with `lyrics`. Rejected (422) until the server supports it.
+   */
+  description?: string;
+  /** "full" (default) or "melody". */
+  cot?: MusicV3Cot;
+  /** Reuse a seed to get closer to a previous result (0..2^31-1). */
+  seed?: number;
+  /** How literally to follow `style` (1.0-10.0, server default 3.0). */
+  cfgScale?: number;
+  /** Your own name for the track (max 200 chars). */
+  displayName?: string;
+  /** COMING SOON — approximate target length in seconds. Rejected (422) until the server supports it. */
+  targetSeconds?: number;
+  /** COMING SOON — lyric/vocal language code. Rejected (422) until the server supports it. */
+  language?: string;
+}
+
+/** Params for `music.reviseScore()` → `POST /api/v1/music/v3/revise` (COMING SOON). */
+export interface MusicV3ReviseParams {
+  /** The v3 job whose score you want revised. */
+  sourceJobId: number;
+  /** What to change, in plain language (1-500 chars). */
+  instruction: string;
+  /** Limit the revision to one section, e.g. "Chorus". */
+  section?: string;
+  /** Limit the revision to a bar range. */
+  bars?: MusicV3Bars;
+  /** Permit the revision to change the tempo. */
+  allowTempoChange?: boolean;
+}
+
+/** Params for `music.recordScore()` → `POST /api/v1/music/v3/edit` (renders audio). */
+export interface MusicV3RecordParams {
+  /** The job the score came from. */
+  sourceJobId: number;
+  /** The COMPLETE score in ABC notation (not a fragment). */
+  abc: string;
+  /** Replacement style text; omit to reuse the source's. */
+  style?: string;
+  /** Replacement lyrics; omit to reuse the source's. */
+  lyrics?: string;
+  /** "melody" (server default) lets the arrangement follow the tune freely; "full" holds it to the written harmony. */
+  cot?: MusicV3Cot;
+  seed?: number;
+  cfgScale?: number;
+  displayName?: string;
+  /** Permit the score to change the source's tempo (off by default on the server). */
+  allowTempoChange?: boolean;
+}
+
+/** Params for `music.generateV3()` → `POST /api/v1/music/v3/generate` (score + audio). */
+export interface MusicV3GenerateParams {
+  style: string;
+  /** Lyrics; omit for an instrumental. Song length follows the lyrics. */
+  lyrics?: string;
+  /** An existing complete score (ABC) to render instead of writing one. */
+  abc?: string;
+  cot?: MusicV3Cot;
+  seed?: number;
+  cfgScale?: number;
+  displayName?: string;
+}
+
+export interface MusicV3ListParams {
+  skip?: number;
+  limit?: number;
+  /** Only jobs from one entry point. */
+  workflow?: MusicV3Workflow;
+  /** Only versions derived from this job (one lineage). */
+  sourceJobId?: number;
+}
+
+export interface MusicV3WaitOptions {
+  /** Max time to wait, in ms. Default: 15 minutes. */
+  timeout?: number;
+  /** Time between polls, in ms. Default: 5000. */
+  pollInterval?: number;
+}
+
+/** The editable score attached to a v3 job. */
+export interface MusicV3Score {
+  /** The score itself, in ABC notation. */
+  abc?: string | null;
+  abc_url?: string | null;
+  midi_url?: string | null;
+  /** True once a score exists and can be sent back for a recording. */
+  editable: boolean;
+  /** "plan" (written by AudioMusic) or "user" (you supplied it). */
+  source?: string | null;
+}
+
+/** Notation-against-notation comparison with the score a job was derived from. */
+export interface MusicV3ScoreComparison {
+  comparable: boolean;
+  notes_and_timing_preserved: boolean;
+  /** Any of "pitches", "rhythm", "chords", "tempo", "structure". */
+  changed: string[];
+  tempo_change_allowed: boolean;
+  /** On a revision: which bars changed (COMING SOON with `reviseScore`). */
+  changed_bars?: number[] | MusicV3Bars[];
+  [key: string]: unknown;
+}
+
+export interface MusicV3Diagnostics {
+  warnings: string[];
+  score_error?: string | null;
+  details: Record<string, unknown>;
+  truncated: Record<string, boolean>;
+  review_recommended: boolean;
+}
+
+/** What a v3 job cost: a small score charge plus the music priced from the score. */
+export interface MusicV3Billing {
+  plan_credits?: number | null;
+  render_credits?: number | null;
+  total_credits?: number | null;
+  score_seconds?: number | null;
+  delivered_seconds?: number | null;
+}
+
+/** A v3 job: status, audio, score, diagnostics and billing. */
+export interface MusicV3Job {
+  job_id: number;
+  workflow: MusicV3Workflow;
+  status: JobStatus;
+  progress?: number | null;
+  display_name?: string | null;
+  style?: string | null;
+  lyrics?: string | null;
+  cot?: MusicV3Cot | null;
+  audio_url?: string | null;
+  audio_urls: Record<string, string>;
+  duration_seconds?: number | null;
+  score?: MusicV3Score | null;
+  score_comparison?: MusicV3ScoreComparison | null;
+  diagnostics: MusicV3Diagnostics;
+  billing: MusicV3Billing;
+  source_job_id?: number | null;
+  error_message?: string | null;
+  note?: string | null;
+  created_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface MusicV3Availability {
+  available: boolean;
 }
 
 // Stem Extraction Types
