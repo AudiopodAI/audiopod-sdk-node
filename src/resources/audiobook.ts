@@ -11,6 +11,18 @@ import type AudioPod from '../client';
 
 const BASE = '/api/v1/audiobook';
 
+/**
+ * Reject an explicitly empty selection array before it reaches the server.
+ * `undefined` means "the whole book"; `[]` used to be read the same way and
+ * re-billed the whole book, and the API now answers it with 400
+ * `empty_selection` (PLAT-3943).
+ */
+function checkSelection(name: string, value: unknown[] | undefined | null): void {
+  if (Array.isArray(value) && value.length === 0) {
+    throw new Error(`${name} is empty; pass undefined to use the whole book`);
+  }
+}
+
 export interface CreateProjectParams {
   title: string;
   author?: string;
@@ -485,8 +497,13 @@ export class Audiobook {
   /**
    * Queue one job that narrates many paragraphs sequentially. Omit both id
    * lists to narrate the whole project.
+   *
+   * @throws Error if `chapterIds` or `paragraphIds` is an explicit empty array;
+   *   omit it to narrate the whole project.
    */
   async batchNarrate(projectId: string, params: BatchNarrateParams = {}): Promise<AudiobookBatchNarrationJob> {
+    checkSelection('chapterIds', params.chapterIds);
+    checkSelection('paragraphIds', params.paragraphIds);
     return this.client.post(`${BASE}/projects/${projectId}/narration/batch`, {
       voice_id: params.voiceId,
       chapter_ids: params.chapterIds,
@@ -533,10 +550,13 @@ export class Audiobook {
    * {@link Audiobook.batchNarrate} (`includeCompleted: true`) to hear it.
    *
    * @throws 409 when a direction run is already in flight for this project.
+   * @throws Error if `chapterIds` is an explicit empty array; omit it to direct
+   *   the whole book.
    */
   async autoDirect(projectId: string, params: AutoDirectParams = {}): Promise<AutoDirectionJob> {
+    checkSelection('chapterIds', params.chapterIds);
     const body: Record<string, any> = {};
-    if (params.chapterIds) body.chapter_ids = params.chapterIds;
+    if (params.chapterIds != null) body.chapter_ids = params.chapterIds;
     return this.client.post(`${BASE}/projects/${projectId}/direction/auto`, body);
   }
 
@@ -596,8 +616,12 @@ export class Audiobook {
    * this method, including {@link Audiobook.produce}, used to fail outright.
    * `batch` narrates the whole project when no `chapterIds` are given, which is
    * what this has always meant.
+   *
+   * @throws Error if `chapterIds` is an explicit empty array; omit it to
+   *   narrate the whole book.
    */
   async startNarration(projectId: string, params: NarrateParams): Promise<any> {
+    checkSelection('chapterIds', params.chapterIds);
     return this.client.post(`${BASE}/projects/${projectId}/narration/batch`, {
       voice_id: params.voiceId,
       chapter_ids: params.chapterIds,
@@ -637,9 +661,15 @@ export class Audiobook {
   }
 
   // ----------------------------------------------------------------- export
-  /** Start an ACX export (runs a compliance check). Returns a `job_id` + `compliance_check`. */
+  /**
+   * Start an ACX export (runs a compliance check). Returns a `job_id` + `compliance_check`.
+   *
+   * @throws Error if `includeChapters` is an explicit empty array; omit it to
+   *   export the whole book.
+   */
   async startExport(projectId: string, includeChapters?: string[]): Promise<any> {
-    return this.client.post(`${BASE}/projects/${projectId}/export`, includeChapters ? { include_chapters: includeChapters } : {});
+    checkSelection('includeChapters', includeChapters);
+    return this.client.post(`${BASE}/projects/${projectId}/export`, includeChapters != null ? { include_chapters: includeChapters } : {});
   }
 
   /** Status of an export job. */

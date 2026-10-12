@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.10.1
+
+### Fixed — an empty selection no longer means "the whole book" (PLAT-3944)
+
+`autoDirect`, `batchNarrate`, `startNarration` and `startExport` (and the
+wrappers built on them) now throw for an explicitly empty `chapterIds`,
+`paragraphIds` or `includeChapters` array, e.g.
+`chapterIds is empty; pass undefined to use the whole book`. Previously
+`autoDirect(id, { chapterIds: [] })` dropped the array and directed the whole
+book again. Omit the field to use the whole book; the API itself now rejects an
+empty array with 400 `empty_selection`.
+
 ## 2.10.0
 
 ### Added — Score-first music (v3)
