@@ -17,6 +17,26 @@ const BASE = '/api/v1/audiobook';
  * re-billed the whole book, and the API now answers it with 400
  * `empty_selection` (PLAT-3943).
  */
+/**
+ * How an edited, already narrated paragraph is re-narrated (rolling out).
+ * `auto` narrates only the changed sentences when the edit is small and bills
+ * only their characters, otherwise the whole passage; `sentence` requires that
+ * (409 `sentence_mode_unavailable` when not possible); `passage` always
+ * narrates the whole passage.
+ */
+export type NarrationMode = 'auto' | 'sentence' | 'passage';
+/** Batch runs and cost estimates have no strict `sentence` mode. */
+export type BatchNarrationMode = 'auto' | 'passage';
+
+const NARRATION_MODES: readonly string[] = ['auto', 'sentence', 'passage'];
+const BATCH_NARRATION_MODES: readonly string[] = ['auto', 'passage'];
+
+function checkMode(mode: string | undefined, allowed: readonly string[]): void {
+  if (mode !== undefined && !allowed.includes(mode)) {
+    throw new Error(`mode must be one of ${allowed.join(', ')}; got ${JSON.stringify(mode)}`);
+  }
+}
+
 function checkSelection(name: string, value: unknown[] | undefined | null): void {
   if (Array.isArray(value) && value.length === 0) {
     throw new Error(`${name} is empty; pass undefined to use the whole book`);
@@ -82,6 +102,8 @@ export interface NarrateParagraphParams {
    * carries a `warnings` entry saying so.
    */
   direction?: string;
+  /** How an edited paragraph is re-narrated; server default `auto`. See {@link NarrationMode}. */
+  mode?: NarrationMode;
 }
 
 /** Optional extras for {@link Audiobook.parseManuscript}. */
@@ -163,6 +185,47 @@ export interface BatchNarrateParams {
    * `speed` (0.5–2.0) and `language` (e.g. `"it"`) are also honoured here.
    */
   narrationSettings?: NarrationSettings;
+  /** `auto` (server default) re-narrates only the changed sentences of small
+   *  edits; `passage` narrates whole passages. */
+  mode?: BatchNarrationMode;
+}
+
+/** Narrow {@link Audiobook.costEstimate}. */
+export interface CostEstimateParams {
+  chapterId?: string;
+  paragraphId?: string;
+  /** `auto` prices an edited passage by its changed sentences when it would be
+   *  narrated that way; `passage` prices the whole passage. */
+  mode?: BatchNarrationMode;
+}
+
+/** One History entry (take) of a paragraph. */
+export interface AudiobookParagraphTake {
+  id: string;
+  paragraph_id: string;
+  take_number: number;
+  text: string;
+  voice_id?: number | null;
+  audio_file_path?: string | null;
+  duration_seconds?: number | null;
+  created_at: string;
+  /** `full`; `spliced` (only the changed sentences were narrated into
+   *  `base_take_id`); `splice_fallback` (an edit narrated as the whole passage
+   *  so the change blends in). */
+  kind?: 'full' | 'spliced' | 'splice_fallback';
+  base_take_id?: string | null;
+  /** `[start, end)` character ranges of `text` newly narrated (spliced takes). */
+  changed_ranges?: [number, number][] | null;
+  [key: string]: any;
+}
+
+/** `breakdown.sentence_edits` on `GET .../projects/{id}/cost`. */
+export interface AudiobookSentenceEditsBreakdown {
+  count: number;
+  characters: number;
+  cents: number;
+  credits: number;
+  free_count: number;
 }
 
 /** One paragraph — the narration unit. */
@@ -207,8 +270,11 @@ export interface AudiobookParagraphListResponse {
 
 /** `POST .../paragraphs/{id}/narrate`. */
 export interface AudiobookParagraphNarrationJob {
-  task_id: string;
+  /** `null` when `status` is `skipped`. */
+  task_id: string | null;
   paragraph_id: string;
+  /** `skipped` when the edit has no audible change (`billing.reason` is
+   *  `no_audible_change`): the audio is kept and nothing is charged. */
   status: string;
   billing?: {
     is_free_regen: boolean;
@@ -216,6 +282,16 @@ export interface AudiobookParagraphNarrationJob {
     estimated_chars: number;
     estimated_seconds: number;
     take_number_after: number;
+    /** Where sentence-level re-narration is available (rolling out):
+     *  `sentence`, `passage`, or `none` when nothing audible changed. */
+    mode?: 'sentence' | 'passage' | 'none';
+    /** Characters billed (equal to `estimated_chars`). */
+    billed_chars?: number;
+    passage_chars?: number;
+    changed_sentences?: number | null;
+    /** Why the whole passage is narrated, or `no_audible_change`. */
+    reason?: string | null;
+    skipped?: boolean;
   };
   [key: string]: any;
 }
@@ -225,6 +301,10 @@ export interface AudiobookBatchNarrationJob {
   job_id: number;
   total_paragraphs: number;
   skipped_paragraphs: number;
+  skipped_needs_review?: number;
+  /** Of `skipped_paragraphs`: edits with no audible change, kept as is and not
+   *  charged. Send `mode: 'passage'` to re-narrate them anyway. */
+  skipped_no_audible_change?: number;
   estimated_completion_time?: string | null;
   [key: string]: any;
 }
@@ -476,13 +556,15 @@ export class Audiobook {
    * `task_id`; poll {@link Audiobook.getParagraph} for the result.
    *
    * Billing: the first take is billed, the first regeneration is free,
-   * subsequent regenerations are billed again.
+   * subsequent regenerations are billed again. With `mode` (rolling out) an
+   * edit can re-narrate and bill only the changed sentences.
    */
   async narrateParagraph(
     projectId: string,
     paragraphId: string,
     params: NarrateParagraphParams = {},
   ): Promise<AudiobookParagraphNarrationJob> {
+    checkMode(params.mode, NARRATION_MODES);
     return this.client.post(`${BASE}/projects/${projectId}/paragraphs/${paragraphId}/narrate`, {
       voice_id: params.voiceId,
       text_override: params.textOverride,
@@ -491,6 +573,7 @@ export class Audiobook {
       emotion: params.emotion,
       character_name: params.characterName,
       direction: params.direction,
+      mode: params.mode,
     });
   }
 
@@ -504,6 +587,7 @@ export class Audiobook {
   async batchNarrate(projectId: string, params: BatchNarrateParams = {}): Promise<AudiobookBatchNarrationJob> {
     checkSelection('chapterIds', params.chapterIds);
     checkSelection('paragraphIds', params.paragraphIds);
+    checkMode(params.mode, BATCH_NARRATION_MODES);
     return this.client.post(`${BASE}/projects/${projectId}/narration/batch`, {
       voice_id: params.voiceId,
       chapter_ids: params.chapterIds,
@@ -512,6 +596,7 @@ export class Audiobook {
       include_locked: params.includeLocked ?? false,
       include_skipped: params.includeSkipped ?? false,
       narration_settings: params.narrationSettings ?? {},
+      mode: params.mode,
     });
   }
 
@@ -602,9 +687,19 @@ export class Audiobook {
     return this.client.get(`${BASE}/voices/languages`);
   }
 
-  /** Per-paragraph cost breakdown for a project before narrating. */
-  async costEstimate(projectId: string): Promise<any> {
-    return this.client.get(`${BASE}/projects/${projectId}/cost-estimate`);
+  /** Per-paragraph cost breakdown for a project before narrating. With `mode`
+   *  (rolling out) each paragraph also carries `mode`, `billed_chars`,
+   *  `passage_chars` and `reason`. */
+  async costEstimate(projectId: string, params: CostEstimateParams = {}): Promise<any> {
+    checkMode(params.mode, BATCH_NARRATION_MODES);
+    const query: Record<string, string> = {};
+    if (params.chapterId !== undefined) query.chapter_id = params.chapterId;
+    if (params.paragraphId !== undefined) query.paragraph_id = params.paragraphId;
+    if (params.mode !== undefined) query.mode = params.mode;
+    return this.client.get(
+      `${BASE}/projects/${projectId}/cost-estimate`,
+      Object.keys(query).length ? query : undefined,
+    );
   }
 
   // -------------------------------------------------------------- narration
