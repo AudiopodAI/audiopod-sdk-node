@@ -92,3 +92,11 @@ test('costEstimate without options sends no params', async () => {
   await resource.costEstimate('p');
   assert.equal(calls[0].data, undefined);
 });
+
+test('getCost reads the project cost', async () => {
+  const { resource, calls } = makeResource({ project_id: 'p', breakdown: { sentence_edits: { count: 2 } } });
+  const out = await resource.getCost('p');
+  assert.equal(calls[0].method, 'GET');
+  assert.equal(calls[0].endpoint, '/api/v1/audiobook/projects/p/cost');
+  assert.equal(out.breakdown.sentence_edits?.count, 2);
+});

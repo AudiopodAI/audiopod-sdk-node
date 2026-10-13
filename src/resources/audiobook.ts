@@ -228,6 +228,42 @@ export interface AudiobookSentenceEditsBreakdown {
   free_count: number;
 }
 
+/** `{characters, cents, credits}` slice of the book cost. */
+export interface AudiobookCostAmount {
+  characters: number;
+  cents: number;
+  credits: number;
+}
+
+/** `GET .../projects/{id}/cost`: what narrating the book has actually cost,
+ *  read from billing records. Every `*_cents` value is US cents. */
+export interface AudiobookProjectCost {
+  project_id: string;
+  currency: string;
+  billing_lane: 'api_wallet' | 'credits' | 'mixed';
+  totals: {
+    charged_cents: number;
+    refunded_cents: number;
+    net_cents: number;
+    charged_credits: number;
+    refunded_credits: number;
+    net_credits: number;
+    characters_billed: number;
+  };
+  breakdown: {
+    first_narration: AudiobookCostAmount;
+    regenerations: AudiobookCostAmount & { count: number };
+    free_regenerations: number;
+    review_approvals: number;
+    /** Rolling out. */
+    sentence_edits?: AudiobookSentenceEditsBreakdown;
+  };
+  chapters: (AudiobookCostAmount & { chapter_id: string; chapter_number: number; title: string })[];
+  partial: boolean;
+  notes: string[];
+  as_of: string;
+}
+
 /** One paragraph — the narration unit. */
 export interface AudiobookParagraph {
   id: string;
@@ -700,6 +736,12 @@ export class Audiobook {
       `${BASE}/projects/${projectId}/cost-estimate`,
       Object.keys(query).length ? query : undefined,
     );
+  }
+
+  /** What narrating this book has actually cost so far (totals, breakdown
+   *  incl. `sentence_edits`, per-chapter net, `partial`, `notes`, `as_of`). */
+  async getCost(projectId: string): Promise<AudiobookProjectCost> {
+    return this.client.get(`${BASE}/projects/${projectId}/cost`);
   }
 
   // -------------------------------------------------------------- narration

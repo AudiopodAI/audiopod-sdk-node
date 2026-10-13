@@ -154,6 +154,8 @@ export type {
   CostEstimateParams,
   AudiobookParagraphTake,
   AudiobookSentenceEditsBreakdown,
+  AudiobookProjectCost,
+  AudiobookCostAmount,
 } from './resources/audiobook';
 
 // Streaming transcription
