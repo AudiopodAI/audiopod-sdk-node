@@ -361,7 +361,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
   if (argv[0] === "--version" || argv[0] === "-v") {
     // Version is injected by tsup at build time via the package.json bundle.
     // For now read the running binary's process.env or fall back gracefully.
-    console.log(`audiopod ${process.env.AUDIOPOD_CLI_VERSION ?? "2.5.0"}`);
+    console.log(`audiopod ${process.env.AUDIOPOD_CLI_VERSION ?? "2.11.0"}`);
     return;
   }
 
