@@ -18,6 +18,7 @@
   "files": [
     "dist",
     "README.md",
+    "AGENTS.md",
     "LICENSE"
   ],
   "scripts": {
@@ -49,7 +50,17 @@
     "noise-reduction",
     "denoiser",
     "mcp",
-    "ai-agents"
+    "ai-agents",
+    "speech to text",
+    "speaker diarization",
+    "text to speech",
+    "voice cloning",
+    "stem separation",
+    "vocal remover",
+    "audio to midi",
+    "music generation",
+    "noise reduction",
+    "mcp server"
   ],
   "author": "AudioPod AI",
   "license": "MIT",

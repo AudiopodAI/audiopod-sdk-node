@@ -111,17 +111,38 @@ export interface TranscriptionStreamEvent {
 // Voice and TTS Types
 export interface Voice {
   id: number;
+  uuid?: string;
   name: string;
   description?: string;
   preview_url?: string;
   is_public?: boolean;
   created_at?: string;
+  /** Processing state of a clone: PENDING, PROCESSING, COMPLETED, FAILED or CANCELLED. */
+  status?: string;
+  error_message?: string | null;
 }
 
 export interface VoiceCreateParams {
   name: string;
   audioFile: string;
   description?: string;
+  /**
+   * Wait until the new clone is COMPLETED before returning. A new clone is
+   * PENDING while it processes, and speech with it fails until then.
+   * Default: false.
+   */
+  waitForReady?: boolean;
+  /** Max milliseconds to wait when `waitForReady` is set. Default: 300000. */
+  timeout?: number;
+  /** Milliseconds between status checks. Default: 3000. */
+  pollInterval?: number;
+}
+
+export interface VoiceWaitOptions {
+  /** Max milliseconds to wait. Default: 300000. */
+  timeout?: number;
+  /** Milliseconds between status checks. Default: 3000. */
+  pollInterval?: number;
 }
 
 /** Delivery style for a directed take. */

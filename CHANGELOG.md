@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Added — `voice.create({ ..., waitForReady: true })` (PLAT-3976)
+
+A new clone is `PENDING` while it processes, and speech with it fails until it
+is `COMPLETED`. `voice.create` now takes `waitForReady` (default `false`),
+`timeout` and `pollInterval` (milliseconds) and polls the voice status until it
+is usable; a failed or cancelled clone, or a timeout, throws `AudioPodError`
+with the reason. The poll is also public as `client.voice.waitForReady(voiceOrId)`.
+`audiopod clone` now waits too. `Voice` gains optional `uuid`, `status` and
+`error_message`.
+
+### Changed — 401 and 402 errors say how to fix them
+
+`AuthenticationError` now says to set `AUDIOPOD_API_KEY` and where to create a
+key. `InsufficientBalanceError` explains that API-key calls are paid from the
+prepaid API wallet first and then the account's credits, and how to top up
+either, and now reads the server's message and `requiredCents` /
+`availableCents` from the nested `detail` object (the message used to be
+`[object Object]` and the amounts `undefined`). Error classes are unchanged.
+`AGENTS.md` ships in the package.
+
 ### Fixed — `denoiser.denoise({ url })` sends a form (PLAT-3976)
 
 A URL denoise was posted as JSON, but the API reads form fields, so the job

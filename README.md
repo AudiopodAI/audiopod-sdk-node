@@ -1,15 +1,42 @@
 # AudioPod Node.js SDK
 
-Official Node.js SDK for [AudioPod AI](https://audiopod.ai) — an all-in-one AI
-**audio** platform: music generation, text-to-speech (with directing), voice
-cloning, stem separation, transcription, speaker separation, noise reduction,
-and audiobook production.
+Add **speech-to-text with speaker labels, text-to-speech, voice cloning, stem
+separation / vocal removal, audio-to-MIDI, music generation and noise
+reduction** to a Node.js or TypeScript app with one package and one API key.
 
-This SDK is the **Platform (API + Agent)** surface of AudioPod — the developer
-entry point alongside the [Python SDK](https://pypi.org/project/audiopod/), the
-CLI, and the MCP server. **Start free** — mint a key, get free credits to try,
-no card required. API usage is **pay-as-you-go** ($1 = 7,500 credits, credits
-never expire).
+```bash
+npm install audiopod
+export AUDIOPOD_API_KEY=ap_...   # https://audiopod.ai/dashboard/account/api-keys
+```
+
+```typescript
+import AudioPod from "audiopod";
+const job = await new AudioPod().transcription.transcribe({ url: "https://example.com/talk.mp3", speakerDiarization: true });
+console.log(job.id, job.status);
+```
+
+| Job | Method | Guide |
+|---|---|---|
+| Speech to text, speaker diarization, subtitles | `client.transcription.transcribe({...})` | [transcription](https://docs.audiopod.ai/quickstarts/transcription) |
+| Text to speech (500+ voices, inline directing) | `client.voice.generate({...})` | [text-to-speech](https://docs.audiopod.ai/quickstarts/text-to-speech) |
+| Voice cloning | `client.voice.create({..., waitForReady: true})` | [voice cloning](https://docs.audiopod.ai/quickstarts/voice-cloning) |
+| Stem separation, vocal remover, karaoke | `client.stems.separate({...})` | [stems](https://docs.audiopod.ai/quickstarts/stem-separation) |
+| Audio to MIDI | `client.midi.transcribe({...})` | [MIDI](https://docs.audiopod.ai/quickstarts/audio-to-midi) |
+| Music generation | `client.music.generate({...})` | [music](https://docs.audiopod.ai/quickstarts/music) |
+| Noise reduction | `client.denoiser.denoise({...})` | [noise reduction](https://docs.audiopod.ai/quickstarts/noise-reduction) |
+| Speaker separation | `client.speaker.diarize({...})` | [speakers](https://docs.audiopod.ai/api-reference/speaker-separation) |
+
+**Billing:** API-key requests are paid from a prepaid USD **API wallet** first
+and, when it can't cover a job, from your account's plan or pay-as-you-go
+credits. Your first API key comes with a $1 starter credit in the wallet
+(verified email). See wallet rates with `client.wallet.getPricing()`; top up
+the wallet from the [API keys page](https://audiopod.ai/dashboard/account/api-keys)
+or add credits at [audiopod.ai/pricing](https://audiopod.ai/pricing). Coding agents:
+read [AGENTS.md](AGENTS.md).
+
+This SDK is the **Platform (API + Agent)** surface of AudioPod, alongside the
+[Python SDK](https://pypi.org/project/audiopod/), the `audiopod` CLI, and the
+MCP server.
 
 [![npm version](https://badge.fury.io/js/audiopod.svg)](https://www.npmjs.com/package/audiopod)
 [![Node 16+](https://img.shields.io/badge/node-16+-green.svg)](https://nodejs.org/)
@@ -19,14 +46,6 @@ never expire).
 Want to see a response before installing anything? The **Getting Started**
 collection reaches a real `200` in two requests with no account and no API key.
 [More about the collections](https://docs.audiopod.ai/sdks/postman).
-
-## Installation
-
-```bash
-npm install audiopod
-# or
-yarn add audiopod
-```
 
 ## Quick start: one call per task
 
@@ -123,8 +142,9 @@ see [the docs](https://docs.audiopod.ai/api-reference/text-to-speech).
 ## Voice Cloning
 
 ```typescript
-// Instant clone from a 5–30s reference clip
-const voice = await client.voice.create({ name: "My Voice", audioFile: "./sample.wav" });
+// Instant clone from a 5–30s reference clip. A new clone is PENDING while it
+// processes; waitForReady returns once it is COMPLETED and usable.
+const voice = await client.voice.create({ name: "My Voice", audioFile: "./sample.wav", waitForReady: true });
 
 // Reuse the clone for TTS
 const job = await client.voice.speak({ text: "Now in my own voice.", voiceId: voice.id });
@@ -343,9 +363,10 @@ try {
   const job = await client.voice.speak({ text: "Hello", voiceId: 368 });
 } catch (error) {
   if (error instanceof AuthenticationError) {
-    console.log("Invalid API key");
+    console.log(error.message); // says to set AUDIOPOD_API_KEY and where to create a key
   } else if (error instanceof InsufficientBalanceError) {
-    console.log(`Need more credits. Required: ${error.requiredCents} cents`);
+    console.log(error.message); // explains the API wallet and how to top it up
+    console.log(`required ${error.requiredCents} cents, available ${error.availableCents}`);
   }
 }
 ```
