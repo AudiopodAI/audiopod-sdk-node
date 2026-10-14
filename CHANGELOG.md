@@ -15,8 +15,9 @@ with the reason. The poll is also public as `client.voice.waitForReady(voiceOrId
 ### Changed — 401 and 402 errors say how to fix them
 
 `AuthenticationError` now says to set `AUDIOPOD_API_KEY` and where to create a
-key. `InsufficientBalanceError` explains the prepaid API wallet and how to top
-it up, and now reads the server's message and `requiredCents` /
+key. `InsufficientBalanceError` explains that API-key calls are paid from the
+prepaid API wallet first and then the account's credits, and how to top up
+either, and now reads the server's message and `requiredCents` /
 `availableCents` from the nested `detail` object (the message used to be
 `[object Object]` and the amounts `undefined`). Error classes are unchanged.
 `AGENTS.md` ships in the package.

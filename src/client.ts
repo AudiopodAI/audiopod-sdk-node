@@ -36,8 +36,11 @@ const DEFAULT_TIMEOUT = 60000;
 const API_KEYS_URL = "https://audiopod.ai/dashboard/account/api-keys";
 const AUTH_HINT = `Set AUDIOPOD_API_KEY (or pass { apiKey }) — create a key at ${API_KEYS_URL}`;
 const BALANCE_HINT =
-  "API-key requests bill your prepaid API wallet (USD). Top it up at " +
-  `${API_KEYS_URL}; check rates with client.wallet.getPricing().`;
+  "API-key requests are paid from your prepaid API wallet (USD) first, then from " +
+  "your account's plan or pay-as-you-go credits; neither can cover this job. " +
+  `Top up the API wallet at ${API_KEYS_URL}, or add credits or upgrade at https://audiopod.ai/pricing.`;
+
+const trimEnd = (text: string) => text.replace(/[\s.]+$/, "");
 
 /** The server's human-readable reason; FastAPI nests it under `detail`. */
 function serverMessage(data: any): string | undefined {
@@ -150,7 +153,8 @@ export default class AudioPod {
     if (error.response) {
       const status = error.response.status;
       const data = error.response.data as any;
-      const server = serverMessage(data);
+      const rawServer = serverMessage(data);
+      const server = rawServer ? trimEnd(rawServer) : undefined;
       const message = server || error.message;
 
       switch (status) {

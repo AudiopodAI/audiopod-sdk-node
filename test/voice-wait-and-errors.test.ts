@@ -129,6 +129,9 @@ test('402 reads the nested detail and explains the API wallet', () => {
       err.availableCents === 10 &&
       err.message.includes('Required: $0.50') &&
       err.message.includes('prepaid API wallet') &&
+      err.message.includes('plan or pay-as-you-go credits') &&
+      err.message.includes('https://audiopod.ai/pricing') &&
+      !err.message.includes('..') &&
       !err.message.includes('[object Object]')
   );
 });
@@ -136,7 +139,8 @@ test('402 reads the nested detail and explains the API wallet', () => {
 test('402 with a plain string detail', () => {
   const client = new AudioPod({ apiKey: 'ap_test' });
   assert.throws(
-    () => client._handleError(httpError(402, { detail: 'Not enough credits' })),
-    (err: any) => err instanceof InsufficientBalanceError && err.message.startsWith('Not enough credits')
+    () => client._handleError(httpError(402, { detail: 'Not enough credits.' })),
+    (err: any) =>
+      err instanceof InsufficientBalanceError && err.message.startsWith('Not enough credits. API-key requests')
   );
 });
