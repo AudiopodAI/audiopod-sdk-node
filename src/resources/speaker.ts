@@ -29,17 +29,19 @@ export class Speaker {
    * ```
    */
   async diarize(params: SpeakerDiarizeParams): Promise<SpeakerJob> {
+    // The API reads `url` from the form body and `num_speakers` from the query
+    // string; a JSON body lost both (PLAT-3976).
+    const endpoint =
+      params.numSpeakers != null
+        ? `/api/v1/speaker/diarize?num_speakers=${encodeURIComponent(params.numSpeakers)}`
+        : '/api/v1/speaker/diarize';
+
     if (params.file) {
-      return this.client.upload('/api/v1/speaker/diarize', params.file, 'file', {
-        num_speakers: params.numSpeakers,
-      });
+      return this.client.upload(endpoint, params.file, 'file');
     }
 
     if (params.url) {
-      return this.client.post('/api/v1/speaker/diarize', {
-        url: params.url,
-        num_speakers: params.numSpeakers,
-      });
+      return this.client.postForm(endpoint, { url: params.url });
     }
 
     throw new Error('Either file or url must be provided');

@@ -295,8 +295,9 @@ export class Music {
    * Generate music and wait for completion
    */
   async generate(params: MusicCreateParams): Promise<MusicJob> {
-    const job = await this.create(params);
-    return this.waitForCompletion(job.id);
+    // The create endpoints answer `{ job: { id }, message }` (PLAT-3976).
+    const created = (await this.create(params)) as MusicJob & { job?: { id: number }; job_id?: number };
+    return this.waitForCompletion(created.id ?? created.job_id ?? created.job!.id);
   }
 
   /**
