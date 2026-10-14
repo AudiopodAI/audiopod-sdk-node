@@ -28,13 +28,19 @@ export class Denoiser {
    * ```
    */
   async create(params: DenoiseParams): Promise<DenoiseJob> {
+    // `POST /denoiser/denoise` takes form fields (file | url, quality_mode),
+    // so a URL job must go as a form too: a JSON body arrives with no URL
+    // and is rejected (PLAT-3976, same class as PLAT-2597).
+    const fields = params.mode ? { quality_mode: params.mode } : undefined;
+
     if (params.file) {
-      return this.client.upload('/api/v1/denoiser/denoise', params.file, 'file');
+      return this.client.upload('/api/v1/denoiser/denoise', params.file, 'file', fields);
     }
 
     if (params.url) {
-      return this.client.post('/api/v1/denoiser/denoise', {
+      return this.client.postForm('/api/v1/denoiser/denoise', {
         url: params.url,
+        ...fields,
       });
     }
 

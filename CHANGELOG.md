@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Fixed — `denoiser.denoise({ url })` sends a form (PLAT-3976)
+
+A URL denoise was posted as JSON, but the API reads form fields, so the job
+arrived without its URL and was rejected. It now goes as a form, like a file
+upload. New optional `mode` (`"balanced"`, `"studio"` or `"ultra"`) is sent as
+the API's `quality_mode`; leave it unset for the server default (`"studio"`).
+
+### Docs
+
+README opens with a one-call quickstart per task and a "Using with AI agents"
+section; `examples/` adds `node-tts`, `next-tts` and `stems-cli`.
+
 ## 2.10.1
 
 ### Fixed — an empty selection no longer means "the whole book" (PLAT-3944)
