@@ -30,6 +30,7 @@ export type {
   // Voice & TTS
   Voice,
   VoiceCreateParams,
+  VoiceWaitOptions,
   TTSCreateParams,
   TTSJob,
   TTSDeliveryMode,

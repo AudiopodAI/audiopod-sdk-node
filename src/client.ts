@@ -33,6 +33,29 @@ const VERSION = "2.10.1";
 const DEFAULT_BASE_URL = "https://api.audiopod.ai";
 const DEFAULT_TIMEOUT = 60000;
 
+const API_KEYS_URL = "https://audiopod.ai/dashboard/account/api-keys";
+const AUTH_HINT = `Set AUDIOPOD_API_KEY (or pass { apiKey }) — create a key at ${API_KEYS_URL}`;
+const BALANCE_HINT =
+  "API-key requests bill your prepaid API wallet (USD). Top it up at " +
+  `${API_KEYS_URL}; check rates with client.wallet.getPricing().`;
+
+/** The server's human-readable reason; FastAPI nests it under `detail`. */
+function serverMessage(data: any): string | undefined {
+  const detail = data?.detail;
+  if (typeof detail === "string") return detail;
+  if (detail && typeof detail.message === "string") return detail.message;
+  if (Array.isArray(detail)) return JSON.stringify(detail);
+  if (typeof data?.message === "string") return data.message;
+  return undefined;
+}
+
+/** The structured part of an error body (`detail` when it is an object). */
+function detailObject(data: any): Record<string, any> {
+  const detail = data?.detail;
+  if (detail && typeof detail === "object" && !Array.isArray(detail)) return detail;
+  return data && typeof data === "object" ? data : {};
+}
+
 export interface AudioPodOptions {
   /** Your AudioPod API key (starts with 'ap_') */
   apiKey?: string;
@@ -78,14 +101,12 @@ export default class AudioPod {
     this._apiKey = options.apiKey || process.env.AUDIOPOD_API_KEY || "";
 
     if (!this._apiKey) {
-      throw new AuthenticationError(
-        "API key is required. Pass apiKey option or set AUDIOPOD_API_KEY environment variable."
-      );
+      throw new AuthenticationError(`API key is required. ${AUTH_HINT}`);
     }
 
     if (!this._apiKey.startsWith("ap_")) {
       throw new AuthenticationError(
-        "Invalid API key format. AudioPod API keys start with 'ap_'"
+        `Invalid API key format: AudioPod API keys start with 'ap_'. ${AUTH_HINT}`
       );
     }
 
@@ -124,21 +145,27 @@ export default class AudioPod {
     this.reader = new Reader(this);
   }
 
-  private _handleError(error: AxiosError): never {
+  /** @internal Map an HTTP error to an SDK error with an actionable message. */
+  _handleError(error: AxiosError): never {
     if (error.response) {
       const status = error.response.status;
       const data = error.response.data as any;
-      const message = data?.detail || data?.message || error.message;
+      const server = serverMessage(data);
+      const message = server || error.message;
 
       switch (status) {
         case 401:
-          throw new AuthenticationError(message || "Invalid API key");
-        case 402:
-          throw new InsufficientBalanceError(
-            message || "Insufficient wallet balance",
-            data?.required_cents,
-            data?.available_cents
+          throw new AuthenticationError(
+            `${server ? `Invalid or missing API key (${server})` : "Invalid or missing API key"}. ${AUTH_HINT}`
           );
+        case 402: {
+          const info = detailObject(data);
+          throw new InsufficientBalanceError(
+            `${server || "Insufficient balance"}. ${BALANCE_HINT}`,
+            info.required_cents,
+            info.available_cents
+          );
+        }
         case 429:
           throw new RateLimitError(message || "Rate limit exceeded");
         default:

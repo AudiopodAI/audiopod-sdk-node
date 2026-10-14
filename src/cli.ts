@@ -274,6 +274,8 @@ async function cmdClone(args: Args): Promise<void> {
     name,
     description: flagStr(args, "description") ?? "",
     audioFile: reference,
+    // Speech with a PENDING clone fails; return once it is usable.
+    waitForReady: true,
   });
   emit(args, voice);
 }
