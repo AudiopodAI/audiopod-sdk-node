@@ -124,8 +124,9 @@ export class Voice {
    * Generate speech and wait for completion
    */
   async generate(params: TTSCreateParams): Promise<TTSJob> {
-    const job = await this.speak(params);
-    return this.waitForCompletion(job.id);
+    // The generate endpoint answers with `job_id`, not `id` (PLAT-3976).
+    const job = (await this.speak(params)) as TTSJob & { job_id?: number };
+    return this.waitForCompletion(job.id ?? job.job_id!);
   }
 
   /**

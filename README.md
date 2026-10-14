@@ -28,21 +28,75 @@ npm install audiopod
 yarn add audiopod
 ```
 
-## Quick Start
+## Quick start: one call per task
+
+Set `AUDIOPOD_API_KEY` (or pass `{ apiKey: "ap_..." }`), then each task is one
+call that waits for the job and returns its output links. Get a key at
+[audiopod.ai/dashboard/account/api-keys](https://www.audiopod.ai/dashboard/account/api-keys).
+
+**Transcribe with speaker labels (as SRT subtitles)**
 
 ```typescript
 import AudioPod from "audiopod";
-
-// Reads AUDIOPOD_API_KEY, or pass { apiKey: "ap_your_api_key" }
 const client = new AudioPod();
-
-// Text-to-speech
-const job = await client.voice.speak({ text: "Welcome to AudioPod.", voiceId: 368 });
-const done = await client.voice.waitForCompletion(job.id);
-console.log(done.output_url);
+const job = await client.transcription.transcribe({ url: "https://example.com/interview.mp3", speakerDiarization: true });
+console.log(await client.transcription.getTranscript(job.id, "srt"));
 ```
 
-Get a key at [audiopod.ai/dashboard/account/api-keys](https://www.audiopod.ai/dashboard/account/api-keys).
+**Split a song into stems**
+
+```typescript
+import AudioPod from "audiopod";
+const client = new AudioPod();
+const job = await client.stems.separate({ file: "./song.mp3", mode: "four" }); // vocals, drums, bass, other
+console.log(job.download_urls);
+```
+
+**Text to speech**
+
+```typescript
+import AudioPod from "audiopod";
+const client = new AudioPod();
+const job = await client.voice.generate({ text: "Welcome to AudioPod.", voiceId: 368 });
+console.log(job.output_url);
+```
+
+**Generate music**
+
+```typescript
+import AudioPod from "audiopod";
+const client = new AudioPod();
+const track = await client.music.generate({ prompt: "lo-fi hip hop, 80 BPM, soft piano", duration: 60 });
+console.log(track.output_url);
+```
+
+**Audio to MIDI / noise removal**
+
+```typescript
+import AudioPod from "audiopod";
+const client = new AudioPod();
+console.log((await client.midi.transcribe({ file: "./song.mp3" })).merged_midi_url);
+console.log((await client.denoiser.denoise({ file: "./voice-memo.m4a" })).output_url);
+```
+
+Step-by-step guides for each task start at
+[docs.audiopod.ai/quickstarts/transcription](https://docs.audiopod.ai/quickstarts/transcription).
+
+## Using with AI agents
+
+- **Coding agents (Claude Code, Cursor, Copilot, Windsurf):** tell the agent to
+  use the `audiopod` npm package and point it at
+  [docs.audiopod.ai/llms.txt](https://docs.audiopod.ai/llms.txt). Every docs page
+  is also served as Markdown: add `.md` to its URL.
+- **Agents as tools (MCP):** connect `https://mcp.audiopod.ai/core` (transcribe,
+  stems, cleanup, MIDI) or `https://mcp.audiopod.ai` (adds speech, voices and
+  music). Sign-in is OAuth; an `X-API-Key` header works for CI.
+- **Claude Code plugin:** `/plugin marketplace add AudiopodAI/claude-plugin`, then
+  `/plugin install audiopod@audiopod`.
+- **ChatGPT:** add `https://mcp.audiopod.ai/core` as a connector in developer mode.
+
+Setup for every client, plus copy-paste prompts:
+[AudioPod for AI agents](https://docs.audiopod.ai/agents).
 
 ## Text-to-Speech
 

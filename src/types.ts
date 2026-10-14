@@ -749,6 +749,11 @@ export interface StemCatalogEntry {
 export interface DenoiseParams {
   file?: string;
   url?: string;
+  /**
+   * Quality mode: "balanced" (fastest), "studio" (broadcast and podcast
+   * quality, the server default) or "ultra" (highest fidelity).
+   */
+  mode?: 'balanced' | 'studio' | 'ultra';
 }
 
 export interface DenoiseJob {

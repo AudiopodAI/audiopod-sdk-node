@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Fixed — `denoiser.denoise({ url })` sends a form (PLAT-3976)
+
+A URL denoise was posted as JSON, but the API reads form fields, so the job
+arrived without its URL and was rejected. It now goes as a form, like a file
+upload. New optional `mode` (`"balanced"`, `"studio"` or `"ultra"`) is sent as
+the API's `quality_mode`; leave it unset for the server default (`"studio"`).
+
+### Fixed — `voice.generate()` and `music.generate()` wait on the right job
+
+`POST /voice/voices/{id}/generate` answers `{ job_id }` and the music create
+endpoints answer `{ job: { id }, message }`; both helpers read `job.id` and
+polled `undefined` (422). They now read the id each endpoint actually returns.
+
+### Fixed — `speaker.diarize({ url, numSpeakers })`
+
+A URL job was posted as JSON, but the API reads `url` from a form and
+`num_speakers` from the query string, so both were lost. It now sends a form
+plus a query parameter (file uploads also send `num_speakers` in the query).
+
+### Docs
+
+README opens with a one-call quickstart per task and a "Using with AI agents"
+section; `examples/` adds `node-tts`, `next-tts` and `stems-cli`.
+
 ## 2.10.1
 
 ### Fixed — an empty selection no longer means "the whole book" (PLAT-3944)
