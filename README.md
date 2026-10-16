@@ -390,6 +390,10 @@ Full TypeScript support with exported types:
 import AudioPod, { StemExtractionJob, StemMode, WalletBalance } from "audiopod";
 ```
 
+## Examples
+
+- [audiopod-example-nextjs-tts](https://github.com/AudiopodAI/audiopod-example-nextjs-tts): text to speech in a Next.js route handler
+
 ## Documentation
 
 - [API Documentation](https://docs.audiopod.ai)
