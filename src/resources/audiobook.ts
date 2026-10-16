@@ -18,7 +18,7 @@ const BASE = '/api/v1/audiobook';
  * `empty_selection` (PLAT-3943).
  */
 /**
- * How an edited, already narrated paragraph is re-narrated (rolling out).
+ * How an edited, already narrated paragraph is re-narrated.
  * `auto` narrates only the changed sentences when the edit is small and bills
  * only their characters, otherwise the whole passage; `sentence` requires that
  * (409 `sentence_mode_unavailable` when not possible); `passage` always
@@ -255,7 +255,7 @@ export interface AudiobookProjectCost {
     regenerations: AudiobookCostAmount & { count: number };
     free_regenerations: number;
     review_approvals: number;
-    /** Rolling out. */
+    /** Edits where only the changed sentences were narrated. */
     sentence_edits?: AudiobookSentenceEditsBreakdown;
   };
   chapters: (AudiobookCostAmount & { chapter_id: string; chapter_number: number; title: string })[];
@@ -318,7 +318,7 @@ export interface AudiobookParagraphNarrationJob {
     estimated_chars: number;
     estimated_seconds: number;
     take_number_after: number;
-    /** Where sentence-level re-narration is available (rolling out):
+    /** How the edit is narrated:
      *  `sentence`, `passage`, or `none` when nothing audible changed. */
     mode?: 'sentence' | 'passage' | 'none';
     /** Characters billed (equal to `estimated_chars`). */
@@ -592,7 +592,7 @@ export class Audiobook {
    * `task_id`; poll {@link Audiobook.getParagraph} for the result.
    *
    * Billing: the first take is billed, the first regeneration is free,
-   * subsequent regenerations are billed again. With `mode` (rolling out) an
+   * subsequent regenerations are billed again. With `mode` an
    * edit can re-narrate and bill only the changed sentences.
    */
   async narrateParagraph(
@@ -724,7 +724,7 @@ export class Audiobook {
   }
 
   /** Per-paragraph cost breakdown for a project before narrating. With `mode`
-   *  (rolling out) each paragraph also carries `mode`, `billed_chars`,
+   *  each paragraph also carries `mode`, `billed_chars`,
    *  `passage_chars` and `reason`. */
   async costEstimate(projectId: string, params: CostEstimateParams = {}): Promise<any> {
     checkMode(params.mode, BATCH_NARRATION_MODES);
