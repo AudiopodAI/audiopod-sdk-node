@@ -164,4 +164,4 @@ export {
   ValidationError,
 } from './errors';
 
-export const VERSION = '2.10.1';
+export const VERSION = '2.11.0';
