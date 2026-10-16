@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Tests — object `detail` errors show `detail.message` (PLAT-3961)
+
+`APIError` already reads `detail.message` when the API returns a structured
+error; a regression test now pins it (no `[object Object]`).
+
 ### Added — `voice.create({ ..., waitForReady: true })` (PLAT-3976)
 
 A new clone is `PENDING` while it processes, and speech with it fails until it
