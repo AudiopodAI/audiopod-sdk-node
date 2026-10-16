@@ -149,6 +149,13 @@ export type {
   AudiobookParagraphNarrationJob,
   AudiobookBatchNarrationJob,
   AudiobookNarrationCancellation,
+  NarrationMode,
+  BatchNarrationMode,
+  CostEstimateParams,
+  AudiobookParagraphTake,
+  AudiobookSentenceEditsBreakdown,
+  AudiobookProjectCost,
+  AudiobookCostAmount,
 } from './resources/audiobook';
 
 // Streaming transcription
@@ -164,4 +171,4 @@ export {
   ValidationError,
 } from './errors';
 
-export const VERSION = '2.11.0';
+export const VERSION = '2.12.0';

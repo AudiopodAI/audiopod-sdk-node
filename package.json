@@ -1,6 +1,6 @@
 {
   "name": "audiopod",
-  "version": "2.11.0",
+  "version": "2.12.0",
   "description": "AudioPod AI audio API for Node.js and TypeScript: speech-to-text transcription with speaker diarization, stem separation, text-to-speech, voice cloning, music generation, audio-to-MIDI and noise reduction",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
